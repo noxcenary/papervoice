@@ -313,23 +313,25 @@
   }
   #handMinute { stroke: #111; stroke-width: 2.5; }
   #handHour   { stroke: rgba(17,17,17,0.35); stroke-width: 1.5; }
-  .center-dot { fill: #111; }
-  #etaLabel {
-    font-family: 'Manrope', sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    fill: #111;
-    text-anchor: middle;
-    dominant-baseline: middle;
+  .clock-eta {
+    text-align: center;
+    line-height: 1.2;
   }
-  #etaSub {
+  .clock-eta .value {
+    font-family: 'Manrope', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #111;
+    display: block;
+  }
+  .clock-eta .label {
     font-family: 'Manrope', sans-serif;
     font-size: 9px;
     font-weight: 600;
-    letter-spacing: 0.1em;
-    fill: rgba(17,17,17,0.4);
-    text-anchor: middle;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
+    color: rgba(17,17,17,0.4);
+    display: block;
   }
 
   .status-line {
@@ -561,11 +563,11 @@
             />
             <line id="handHour" x1="100" y1="100" x2="100" y2="46"/>
             <line id="handMinute" x1="100" y1="100" x2="100" y2="30"/>
-            <rect id="etaBg" x="66" y="83" width="68" height="24" rx="12" fill="#fff" opacity="0.95"/>
-            <circle class="center-dot" cx="100" cy="100" r="4" fill="none"/>
-            <text id="etaLabel" x="100" y="97">0s</text>
-            <text id="etaSub" x="100" y="116">remaining</text>
           </svg>
+        </div>
+        <div class="clock-eta">
+          <span class="value" id="etaLabel">0s</span>
+          <span class="label" id="etaSub">remaining</span>
         </div>
 
         <div class="status-line">
