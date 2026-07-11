@@ -561,6 +561,7 @@
             />
             <line id="handHour" x1="100" y1="100" x2="100" y2="46"/>
             <line id="handMinute" x1="100" y1="100" x2="100" y2="30"/>
+            <rect id="etaBg" x="66" y="83" width="68" height="24" rx="12" fill="#fff" opacity="0.95"/>
             <circle class="center-dot" cx="100" cy="100" r="4"/>
             <text id="etaLabel" x="100" y="97">0s</text>
             <text id="etaSub" x="100" y="116">remaining</text>
@@ -835,10 +836,19 @@ audioPlayer.addEventListener('play', () => {
 async function pollJob(jobId) {
   try {
     const res = await fetch(`/progress/${jobId}`);
+
+    // Server/proxy may return HTML (timeout, gateway error) — don't assume JSON
+    const contentType = res.headers.get('content-type') || '';
+    if (!res.ok || !contentType.includes('application/json')) {
+      const body = await res.text().catch(() => '');
+      const snippet = body.replace(/<[^>]*>/g, '').trim().slice(0, 120) || `HTTP ${res.status}`;
+      throw new Error(`Server error (${res.status}): ${snippet}`);
+    }
+
     const job = await res.json();
 
-    if (!res.ok || job.error) {
-      throw new Error(job.error || 'Job not found.');
+    if (job.error) {
+      throw new Error(job.error);
     }
 
     if (job.status === 'error') {

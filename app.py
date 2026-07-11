@@ -368,10 +368,13 @@ def convert():
 
 @app.route("/progress/<job_id>")
 def progress(job_id):
-    job = get_job(job_id)
-    if not job:
-        return jsonify({"error": "Job not found."}), 404
-    return jsonify(job)
+    try:
+        job = get_job(job_id)
+        if not job:
+            return jsonify({"error": "Job not found."}), 404
+        return jsonify(job)
+    except Exception as e:
+        return jsonify({"error": f"Internal error: {e}"}), 500
 
 
 @app.route("/audio/<job_id>")
