@@ -89,12 +89,19 @@ alternatives to `pypdf`).
 
 4. **Job storage is in-memory** (`JOBS` dict in `app.py`). This means:
    - Restarting the server loses all in-progress/completed job records
+   - **Confirmed failure (2026-07-11):** a `git push` during an active conversion
+     triggers a Render redeploy — the old container is killed and its in-memory
+     `JOBS` dict vanishes. The frontend's next `/progress/<job_id>` poll gets
+     `404 Job not found`. The job, its progress, and any finished audio are
+     unrecoverable. The only mitigation is: don't push new commits while a live
+     test conversion is running.
    - Multiple gunicorn workers do NOT share this dict — a poll request could hit
      a different worker than the one processing the job and get a 404
    - **Current config: `--workers 1`** (set in both `Procfile` and `Dockerfile`).
      Single-worker is the intentional v1 launch config — avoids the dict-sharding
-     bug at the cost of serialising all requests. Fine for personal / shared-with-friends
-     use. Follow-up: migrate job state to Redis or SQLite before bumping workers.
+     bug at the cost of serialising all requests. Fine for personal use.
+     **Follow-up (higher priority):** migrate job state to Redis or SQLite before
+     bumping workers or relying on concurrent deploys.
 
 5. ~~**No cleanup of `/tmp/pdf_audio`**~~ — **Fixed.** `_cleanup_old_audio` daemon
    thread deletes audio files older than 2 h, runs every 10 min.
@@ -134,3 +141,7 @@ This is fine for v1.
       returns user-friendly error message
 - [x] `/convert` input validation — `speed` field now parsed with try/except + clamped -50..+50
 - [ ] (Not yet started) Rate limiting / abuse prevention now that this is public-facing
+- [ ] Migrate job state from in-memory `JOBS` dict to Redis or SQLite — any container
+      restart (deploy, crash, scale) loses in-flight conversions. Confirmed failure:
+      a `git push` during an active job kills the old container's `JOBS` dict,
+      leaving the user with a `404 Job not found` error and unrecoverable audio.
