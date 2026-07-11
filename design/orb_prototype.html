@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Papervoice — Interactive Voice Orb Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #080808;
+    color: #f5f5f5;
+    font-family: 'Manrope', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 40px 24px;
+    gap: 40px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── Film grain ── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  h2 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(245,245,245,0.4);
+    z-index: 2;
+  }
+
+  /* ── Orb Container ── */
+  .orb-container {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+
+  /* Glowing background layers */
+  .orb-glow {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 70%);
+    filter: blur(20px);
+    width: 100%;
+    height: 100%;
+    transform: scale(0.8);
+    transition: transform 0.1s ease-out;
+    pointer-events: none;
+  }
+
+  /* Outer morphing vector circle */
+  .orb-svg {
+    position: absolute;
+    width: 120%;
+    height: 120%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .orb-path {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.8);
+    stroke-width: 1.5;
+    transition: d 0.1s ease-out;
+  }
+
+  .orb-path-inner {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 1;
+  }
+
+  /* Core solid center */
+  .orb-core {
+    width: 80px;
+    height: 80px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 
+      0 0 30px 10px rgba(255, 255, 255, 0.4),
+      0 0 60px 20px rgba(255, 255, 255, 0.2);
+    z-index: 3;
+    transition: transform 0.1s ease-out;
+  }
+
+  /* ── Interface Card ── */
+  .player-card {
+    background: #141414;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 24px;
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    z-index: 2;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+  }
+
+  .audio-select-row {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .file-input-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1.5px dashed rgba(245, 245, 245, 0.2);
+    background: transparent;
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(245, 245, 245, 0.8);
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.15s, background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .file-input-btn:hover {
+    border-color: rgba(245,245,245,0.5);
+    background: rgba(245,245,245,0.03);
+  }
+  #audioFile { display: none; }
+
+  .synth-btn {
+    padding: 12px 18px;
+    border-radius: 10px;
+    border: 1px solid rgba(245, 245, 245, 0.1);
+    background: rgba(245,245,245,0.05);
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .synth-btn:hover {
+    background: rgba(245,245,245,0.1);
+  }
+  .synth-btn.playing {
+    background: #fff;
+    color: #000;
+    border-color: #fff;
+  }
+
+  audio {
+    width: 100%;
+    height: 40px;
+    accent-color: #fff;
+  }
+
+  /* ── Helper instructions ── */
+  .instructions {
+    font-size: 12px;
+    color: rgba(245,245,245,0.4);
+    text-align: center;
+    max-width: 320px;
+    line-height: 1.5;
+    z-index: 2;
+  }
+</style>
+</head>
+<body>
+
+<h2>Voice-Reactive Orb — Prototype</h2>
+
+<div class="orb-container">
+  <div class="orb-glow" id="orbGlow1"></div>
+  <div class="orb-glow" id="orbGlow2" style="transform: scale(0.6); opacity: 0.5;"></div>
+  
+  <svg class="orb-svg" viewBox="0 0 200 200">
+    <path class="orb-path-inner" id="orbInnerPath" d=""></path>
+    <path class="orb-path" id="orbOuterPath" d=""></path>
+  </svg>
+
+  <div class="orb-core" id="orbCore"></div>
+</div>
+
+<div class="player-card">
+  <div class="audio-select-row">
+    <label class="file-input-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+      </svg>
+      Upload MP3 File
+      <input type="file" id="audioFile" accept="audio/*">
+    </label>
+    <button class="synth-btn" id="synthBtn">Generate Voice Synth</button>
+  </div>
+  
+  <audio id="audioPlayer" controls></audio>
+</div>
+
+<div class="instructions">
+  Click "Generate Voice Synth" or upload any audio file, then click Play. Web Audio API AnalyserNode tracks volume and frequencies to morph the outer SVG vectors and glow intensity in real time.
+</div>
+
+<script>
+const audioPlayer = document.getElementById('audioPlayer');
+const audioFile = document.getElementById('audioFile');
+const synthBtn = document.getElementById('synthBtn');
+const orbCore = document.getElementById('orbCore');
+const orbGlow1 = document.getElementById('orbGlow1');
+const orbGlow2 = document.getElementById('orbGlow2');
+const orbOuterPath = document.getElementById('orbOuterPath');
+const orbInnerPath = document.getElementById('orbInnerPath');
+
+let audioCtx = null;
+let analyser = null;
+let sourceNode = null;
+let dataArray = null;
+let animationFrameId = null;
+
+// ── Synthetic Voice Generator ──
+// Emulates speech-like cadence using oscillators & LFOs
+let synthActive = false;
+let synthGain = null;
+let synthInterval = null;
+
+function toggleSynth() {
+  if (synthActive) {
+    stopSynth();
+    return;
+  }
+  startSynth();
+}
+
+function startSynth() {
+  initAudio();
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+
+  synthActive = true;
+  synthBtn.textContent = 'Stop Synth';
+  synthBtn.classList.add('playing');
+  
+  // Pause standard player if playing
+  audioPlayer.pause();
+
+  // Create Oscillator nodes to mock voice frequencies
+  const osc1 = audioCtx.createOscillator();
+  const osc2 = audioCtx.createOscillator();
+  synthGain = audioCtx.createGain();
+
+  osc1.type = 'sawtooth';
+  osc1.frequency.value = 110; // low fundamental voice hum
+
+  osc2.type = 'triangle';
+  osc2.frequency.value = 220; // harmonic tone
+
+  // Speech cadence LFO
+  const lfo = audioCtx.createOscillator();
+  const lfoGain = audioCtx.createGain();
+  lfo.frequency.value = 2.5; // speech speed modulation
+  lfoGain.gain.value = 0.8;
+
+  lfo.connect(lfoGain);
+  lfoGain.connect(synthGain.gain);
+  
+  osc1.connect(synthGain);
+  osc2.connect(synthGain);
+  synthGain.connect(analyser); // pipe to analyser!
+  synthGain.connect(audioCtx.destination);
+
+  lfo.start();
+  osc1.start();
+  osc2.start();
+
+  // Randomize volume and pitch over time to simulate talking rises/falls
+  synthInterval = setInterval(() => {
+    const time = audioCtx.currentTime;
+    // frequency shifts
+    osc1.frequency.setValueAtTime(90 + Math.random() * 50, time);
+    osc2.frequency.setValueAtTime(180 + Math.random() * 100, time);
+    
+    // random silent pauses (gaps between sentences)
+    if (Math.random() > 0.75) {
+      synthGain.gain.setValueAtTime(0, time);
+      synthGain.gain.linearRampToValueAtTime(0, time + 0.3);
+    } else {
+      synthGain.gain.setValueAtTime(0.2, time);
+      synthGain.gain.linearRampToValueAtTime(0.5 + Math.random() * 0.4, time + 0.2);
+    }
+  }, 350);
+
+  // Store references to clean up
+  synthActiveNodes = { osc1, osc2, lfo, lfoGain };
+}
+
+let synthActiveNodes = null;
+
+function stopSynth() {
+  synthActive = false;
+  synthBtn.textContent = 'Generate Voice Synth';
+  synthBtn.classList.remove('playing');
+  clearInterval(synthInterval);
+  if (synthActiveNodes) {
+    try {
+      synthActiveNodes.osc1.stop();
+      synthActiveNodes.osc2.stop();
+      synthActiveNodes.lfo.stop();
+    } catch(e){}
+    synthActiveNodes = null;
+  }
+}
+
+// ── Web Audio Setup ──
+function initAudio() {
+  if (audioCtx) return;
+  
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 64; // Small fft for simple low frequency orb reactivity
+  const bufferLength = analyser.frequencyBinCount;
+  dataArray = new Uint8Array(bufferLength);
+
+  // Hook standard audio player
+  sourceNode = audioCtx.createMediaElementSource(audioPlayer);
+  sourceNode.connect(analyser);
+  analyser.connect(audioCtx.destination);
+
+  updateVisuals();
+}
+
+// Handle MP3 upload
+audioFile.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    stopSynth();
+    const url = URL.createObjectURL(file);
+    audioPlayer.src = url;
+    initAudio();
+  }
+});
+
+// Resume AudioContext on interaction
+audioPlayer.addEventListener('play', () => {
+  initAudio();
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  stopSynth();
+});
+
+synthBtn.addEventListener('click', toggleSynth);
+
+// ── Render Loop ──
+// Morphs SVG paths and scales glowing wrappers using analyser frequency data
+let angleOffset = 0;
+
+function updateVisuals() {
+  animationFrameId = requestAnimationFrame(updateVisuals);
+  
+  if (!analyser) return;
+  
+  analyser.getByteFrequencyData(dataArray);
+
+  // Calculate average volume (focusing heavily on bass/mid vocal frequencies: first 8 bins)
+  let sum = 0;
+  let voiceBins = 8;
+  for (let i = 0; i < voiceBins; i++) {
+    sum += dataArray[i];
+  }
+  const avgVoiceVal = sum / voiceBins; // 0 to 255
+  const normVolume = avgVoiceVal / 255; // 0.0 to 1.0
+
+  // 1. Core core scale & glow intensity
+  const scale = 1 + normVolume * 0.6; // core scales up by up to 60%
+  orbCore.style.transform = `scale(${scale})`;
+  
+  // Opacity & blur shift based on sound intensity
+  orbGlow1.style.transform = `scale(${0.8 + normVolume * 0.8})`;
+  orbGlow1.style.opacity = `${0.2 + normVolume * 0.8}`;
+  orbGlow2.style.transform = `scale(${0.6 + normVolume * 0.4})`;
+  orbGlow2.style.opacity = `${0.3 + normVolume * 0.7}`;
+
+  // 2. Morph SVG paths using frequency bin offsets
+  angleOffset += 0.03 + normVolume * 0.08; // speed up rotation when louder
+  
+  const points = 16;
+  const cx = 100, cy = 100;
+  
+  // Outer morph path (highly reactive)
+  let dOuter = '';
+  // Inner faint path (less reactive, acts as reference structure)
+  let dInner = '';
+
+  for (let i = 0; i < points; i++) {
+    const angle = (i / points) * Math.PI * 2 + angleOffset;
+    
+    // Map frequency bin value to radius offset
+    const freqIndex = i % dataArray.length;
+    const freqVal = dataArray[freqIndex];
+    const normFreq = freqVal / 255;
+
+    const baseRadiusOuter = 55;
+    const rOuter = baseRadiusOuter + normFreq * 24 * (i % 2 === 0 ? 1 : 0.6);
+
+    const baseRadiusInner = 40;
+    const rInner = baseRadiusInner + normFreq * 8;
+
+    const xOuter = cx + Math.cos(angle) * rOuter;
+    const yOuter = cy + Math.sin(angle) * rOuter;
+
+    const xInner = cx + Math.cos(angle) * rInner;
+    const yInner = cy + Math.sin(angle) * rInner;
+
+    if (i === 0) {
+      dOuter += `M ${xOuter} ${yOuter}`;
+      dInner += `M ${xInner} ${yInner}`;
+    } else {
+      dOuter += ` L ${xOuter} ${yOuter}`;
+      dInner += ` L ${xInner} ${yInner}`;
+    }
+  }
+  
+  dOuter += ' Z';
+  dInner += ' Z';
+
+  orbOuterPath.setAttribute('d', dOuter);
+  orbInnerPath.setAttribute('d', dInner);
+}
+
+</script>
+</body>
+</html>

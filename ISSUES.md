@@ -35,23 +35,55 @@ time debugging it as if it were a real bug. If Antigravity's sandbox has similar
 network restrictions, the same false alarm may reoccur — test on an unrestricted
 network to confirm.
 
+### 5. Header/footer bleed — running boilerplate narrated on every page
+**Found during:** Task 5 real-world test, 28-page academic PDF ("Introduction to AI
+and Applications"). **Status: Fixed.**
+
+Neither `pypdf` nor Tesseract distinguish body text from running headers/footers.
+Every repeated author/course-code line was extracted and sent to TTS, producing a
+53-minute audio file for a document that should have been far shorter.
+
+**Fix applied:** two post-extraction passes run on the full `pages_text` list
+before `chunk_text()` (covers both `pypdf` and OCR paths):
+- `strip_repeated_boilerplate(threshold=0.6)` — drops any line appearing
+  identically on ≥60% of pages. Exact whole-line match only; repeated words
+  inside sentences are unaffected.
+- `strip_page_numbers()` — drops standalone numeric lines (e.g. `"42"`, `"- 7 -"`).
+  Page numbers differ per page so the 60% threshold won't catch them.
+
+**Remaining risk:** academic PDFs with broken/unusual font encodings may make
+`pypdf` extraction too sparse and trigger the OCR fallback unnecessarily — if OCR
+output is meaningfully cleaner than plain `pypdf` on a text-layer PDF, that's a
+text-extraction quality issue worth investigating (`pdfplumber` or `PyMuPDF` as
+alternatives to `pypdf`).
+
+**Known edge cases (backlog, not blockers):**
+- `strip_page_numbers()` won't catch worded footers like `"Page 3"` or `"Page 3 of 28"` —
+  those contain non-digit chars and won't match the regex. If QA hits a doc where this
+  slips through, expand the regex then (don't pre-optimise).
+- On very short documents (3–4 pages), a legitimately repeated section title could
+  coincidentally hit the 60% threshold in `strip_repeated_boilerplate` and be stripped.
+  Low probability; fix if it's actually observed, not before.
+
 ---
+
 
 ## 🟡 Needs Verification / Untested
 
-1. **OCR accuracy and speed** — no real scanned PDF has been tested against the
-   new OCR fallback path. Need to verify: (a) OCR actually triggers correctly on
-   image-only pages, (b) extracted OCR text quality is acceptable, (c) OCR doesn't
-   add unacceptable processing time for large scanned documents.
+1. **OCR accuracy and speed** — tested on a real 28-page academic PDF.
+   Measured OCR throughput: **~43 sec/page** (~20 min total for 28 pages).
+   Use this figure for any page-count cap or upload-time warning in the UI.
+   Accuracy on real academic scans still needs a subjective quality check;
+   also flag if OCR output is materially cleaner than `pypdf` on the same doc
+   (would indicate a text-extraction quality issue, not a true "needs OCR" case).
 
 2. **Progress % / ETA accuracy** — the ETA calculation is a simple linear
    extrapolation (elapsed time / % done * remaining %). This will be inaccurate
    early in the job (first chunk) and should smooth out. Not yet tested against
    a real long document to see how close the estimate lands.
 
-3. **Concurrent users** — Flask + gunicorn with 2 workers. If two people convert
-   large PDFs simultaneously, one may stall waiting for a worker. Background jobs
-   run in Python threads within the request-serving process, which works but
+3. **Concurrent users** — gunicorn with `--workers 1` (Free tier, single CPU).
+   Background jobs run in Python threads within the worker, which works but
    doesn't scale well. Fine for personal/small-scale use; would need a real task
    queue (Celery/RQ + Redis) for anything higher-traffic.
 
@@ -64,35 +96,30 @@ network to confirm.
      bug at the cost of serialising all requests. Fine for personal / shared-with-friends
      use. Follow-up: migrate job state to Redis or SQLite before bumping workers.
 
-5. **No cleanup of `/tmp/pdf_audio` and `/tmp/pdf_uploads`** — files accumulate
-   over time with no expiry. Fine short-term, but will fill disk on a long-running
-   deployment. Needs a cleanup routine (e.g., delete files older than N hours).
+5. ~~**No cleanup of `/tmp/pdf_audio`**~~ — **Fixed.** `_cleanup_old_audio` daemon
+   thread deletes audio files older than 2 h, runs every 10 min.
 
-6. **Encrypted/password-protected PDFs** — not handled. `pypdf` will likely raise
-   an exception that isn't caught with a friendly error message. Untested.
+6. ~~**Encrypted/password-protected PDFs**~~ — **Fixed.** `reader.is_encrypted` check
+   in `extract_text_with_progress` raises a friendly `ValueError` before any page
+   iteration; frontend shows a clean error message.
 
 ---
 
-## 🟢 Deployment Requirements (New — for OCR support)
+## 🟢 Deployment — Render (confirmed working)
 
-The OCR fallback requires **system-level binaries** that are NOT Python packages:
-- `tesseract-ocr` (the OCR engine itself)
-- `poppler-utils` (for rasterizing PDF pages to images, via `pdf2image`)
+**Live URL:** https://papervoice.onrender.com  
+**Platform:** Render Free tier, Docker runtime, auto-detected from `Dockerfile` in repo root.  
+**Confirmed in build log (2026-07-11):**
+- `apt-get install tesseract-ocr poppler-utils` succeeded in Render's build sandbox
+- All Python packages installed cleanly (pip step #11, 6.7 s)
+- Gunicorn started on `0.0.0.0:5000`, worker pid booted
+- Render auto-set `WEB_CONCURRENCY=1` (consistent with our `--workers 1` config)
+- Port 5000 detected; brief network-config redeploy (normal Render behaviour), then live
 
-**This is the biggest deployment risk.** Railway's default Python build (via
-Railpack, as seen in this project's earlier build logs) installs Python packages
-via pip but does NOT automatically install system/apt packages like Tesseract.
-
-You will likely need one of:
-- A `railpack.json` config that specifies additional apt packages (check current
-  Railway/Railpack docs for the correct syntax — this may have changed)
-- OR switch to a Dockerfile-based deploy where you can explicitly
-  `apt-get install tesseract-ocr poppler-utils`
-- OR find a Railway template/buildpack that includes these pre-installed
-
-**Action item:** confirm the correct way to install system packages on Railway's
-current build system before assuming OCR will work in production. It has only
-been tested with these binaries available locally.
+**Note on `/tmp` persistence:** Render Free tier uses ephemeral storage — `/tmp` is
+not persisted across deploys/restarts. Audio files vanish on redeploy anyway, so the
+2-hour TTL cleanup is belt-and-suspenders rather than the primary expiry mechanism.
+This is fine for v1.
 
 ---
 

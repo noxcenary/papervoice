@@ -123,6 +123,60 @@ def ocr_page(pdf_path: Path, page_number: int) -> str:
     return pytesseract.image_to_string(images[0]).strip()
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# 🧼  BOILERPLATE REMOVAL — headers/footers + standalone page numbers
+# Runs on the full page list after extraction (both pypdf and OCR paths).
+# ══════════════════════════════════════════════════════════════════════════
+def strip_repeated_boilerplate(pages_text: list[str], threshold: float = 0.6) -> list[str]:
+    """
+    Drop any line that appears on more than `threshold` fraction of pages.
+    Normalizes lines by stripping trailing numbers/spaces to catch headers or
+    footers that have page numbers appended (e.g. 'Prepared by: Author 3').
+    """
+    if not pages_text:
+        return pages_text
+
+    import re
+    from collections import Counter
+
+    def normalize(line: str) -> str:
+        s = line.strip()
+        # Remove trailing digits, dashes, and spaces
+        return re.sub(r'[\s\-–—\d]*$', '', s)
+
+    line_counts: Counter = Counter()
+    for page in pages_text:
+        # count each normalized line once per page
+        for line in set(page.splitlines()):
+            norm = normalize(line)
+            if norm:
+                line_counts[norm] += 1
+
+    cutoff = len(pages_text) * threshold
+    boilerplate = {norm for norm, count in line_counts.items() if count >= cutoff}
+
+    cleaned = []
+    for page in pages_text:
+        kept = [ln for ln in page.splitlines() if normalize(ln) not in boilerplate]
+        cleaned.append("\n".join(kept))
+    return cleaned
+
+
+
+def strip_page_numbers(pages_text: list[str]) -> list[str]:
+    """
+    Drop standalone lines that are purely numeric (e.g. "42", "- 7 -").
+    Page numbers differ per page so the repeat-threshold won't catch them.
+    """
+    import re
+    page_num_re = re.compile(r'^[\s\-–—]*\d+[\s\-–—]*$')
+    cleaned = []
+    for page in pages_text:
+        kept = [ln for ln in page.splitlines() if not page_num_re.match(ln)]
+        cleaned.append("\n".join(kept))
+    return cleaned
+
+
 def extract_text_with_progress(pdf_path: Path, job_id: str) -> str:
     reader = PdfReader(str(pdf_path))
     if reader.is_encrypted:
@@ -152,6 +206,12 @@ def extract_text_with_progress(pdf_path: Path, job_id: str) -> str:
 
         pages_text.append(text)
         update_job(job_id, pages_done=i + 1, phase="extracting")
+
+    # Remove headers/footers and standalone page numbers before joining.
+    # Both passes operate on the full page list so the 60% threshold has
+    # global context — must happen here, not inside the per-page loop.
+    pages_text = strip_repeated_boilerplate(pages_text)
+    pages_text = strip_page_numbers(pages_text)
 
     full_text = "\n\n".join(pages_text)
     update_job(job_id, ocr_used=ocr_used)

@@ -1,10 +1,10 @@
-# Using a Dockerfile instead of Railway's default Python buildpack because
+# Using a Dockerfile instead of Render's default Python buildpack because
 # OCR requires system binaries (tesseract-ocr, poppler-utils) that aren't
 # installed by pip alone. See ISSUES.md for context.
 #
-# UNTESTED — flagged for verification in Antigravity. Confirm Railway picks
-# this up automatically (it should, when a Dockerfile is present in repo root)
-# and that the apt-get install step succeeds in Railway's build environment.
+# VERIFIED: Render auto-detects this Dockerfile, apt-get install succeeds
+# in the build sandbox, and the service starts cleanly on port 5000.
+# Live at https://papervoice.onrender.com
 
 FROM python:3.11-slim
 

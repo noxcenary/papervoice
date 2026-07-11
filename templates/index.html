@@ -5,163 +5,208 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Papervoice — Listen to any PDF</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ink:       #14181F;
-    --ink-soft:  #1E2430;
-    --paper:     #F6F1E4;
-    --paper-dim: #E7DFCB;
-    --amber:     #E8A33D;
-    --amber-dim: #C8862A;
-    --line:      rgba(246, 241, 228, 0.14);
-    --text-dim:  rgba(246, 241, 228, 0.62);
+    --black:      #080808;
+    --charcoal:   #141414;
+    --surface:    #1c1c1c;
+    --border:     rgba(255,255,255,0.08);
+    --white:      #f5f5f5;
+    --white-dim:  rgba(245,245,245,0.55);
+    --white-faint:rgba(245,245,245,0.12);
+    --card-bg:    #ffffff;
+    --card-ink:   #111111;
+    --card-dim:   rgba(17,17,17,0.48);
+    --card-faint: rgba(17,17,17,0.07);
+    --card-border:rgba(17,17,17,0.13);
   }
 
-  * { box-sizing: border-box; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
-    margin: 0;
-    background: var(--ink);
-    color: var(--paper);
-    font-family: 'Inter', sans-serif;
+    background: var(--black);
+    color: var(--white);
+    font-family: 'Manrope', sans-serif;
     min-height: 100vh;
     overflow-x: hidden;
+    position: relative;
   }
 
-  .grain {
+  /* ── Background gradient ── */
+  body::before {
+    content: '';
     position: fixed;
     inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% 10%, rgba(255,255,255,0.03) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 90%, rgba(255,255,255,0.02) 0%, transparent 60%),
+      linear-gradient(170deg, #0f0f0f 0%, #080808 50%, #0c0c0c 100%);
     pointer-events: none;
-    opacity: 0.035;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    z-index: 0;
+  }
+
+  /* ── Film grain ── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
     z-index: 1;
   }
 
   .wrap {
     max-width: 720px;
     margin: 0 auto;
-    padding: 72px 24px 100px;
+    padding: 80px 24px 120px;
     position: relative;
     z-index: 2;
   }
 
-  header {
-    margin-bottom: 56px;
-  }
+  /* ── Header ── */
+  header { margin-bottom: 64px; }
 
   .eyebrow {
-    font-size: 13px;
-    letter-spacing: 0.14em;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: var(--amber);
-    font-weight: 600;
-    margin-bottom: 18px;
+    color: var(--white-dim);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .eyebrow::after {
+    content: '';
+    flex: 1;
+    max-width: 48px;
+    height: 1px;
+    background: var(--border);
   }
 
   h1 {
-    font-family: 'Fraunces', serif;
-    font-size: clamp(40px, 7vw, 58px);
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(42px, 7.5vw, 64px);
     font-weight: 600;
-    line-height: 1.05;
-    margin: 0 0 20px;
-    letter-spacing: -0.01em;
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+    margin-bottom: 22px;
+    color: var(--white);
   }
-
   h1 em {
     font-style: italic;
     font-weight: 400;
-    color: var(--amber);
+    color: rgba(245,245,245,0.7);
   }
 
   .sub {
-    font-size: 17px;
-    color: var(--text-dim);
-    max-width: 460px;
-    line-height: 1.6;
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--white-dim);
+    max-width: 440px;
+    font-weight: 400;
   }
 
-  /* ---- Waveform signature ---- */
+  /* ── Monochrome waveform ── */
   .wave-signature {
     display: flex;
     align-items: flex-end;
-    gap: 4px;
-    height: 40px;
-    margin: 28px 0 0;
+    gap: 5px;
+    height: 44px;
+    margin-top: 32px;
   }
   .wave-signature span {
-    width: 4px;
-    background: var(--amber);
+    width: 3px;
+    background: rgba(245,245,245,0.25);
     border-radius: 2px;
-    opacity: 0.85;
-    animation: wave-idle 2.4s ease-in-out infinite;
+    animation: wave-idle 2.6s ease-in-out infinite;
   }
-  .wave-signature span:nth-child(1) { height: 12px; animation-delay: 0s; }
-  .wave-signature span:nth-child(2) { height: 24px; animation-delay: 0.15s; }
-  .wave-signature span:nth-child(3) { height: 36px; animation-delay: 0.3s; }
-  .wave-signature span:nth-child(4) { height: 18px; animation-delay: 0.45s; }
-  .wave-signature span:nth-child(5) { height: 30px; animation-delay: 0.6s; }
-  .wave-signature span:nth-child(6) { height: 14px; animation-delay: 0.75s; }
-  .wave-signature span:nth-child(7) { height: 26px; animation-delay: 0.9s; }
-
+  .wave-signature span:nth-child(1)  { height: 10px; animation-delay: 0.00s; }
+  .wave-signature span:nth-child(2)  { height: 22px; animation-delay: 0.15s; }
+  .wave-signature span:nth-child(3)  { height: 38px; animation-delay: 0.30s; }
+  .wave-signature span:nth-child(4)  { height: 16px; animation-delay: 0.45s; }
+  .wave-signature span:nth-child(5)  { height: 30px; animation-delay: 0.60s; }
+  .wave-signature span:nth-child(6)  { height: 12px; animation-delay: 0.75s; }
+  .wave-signature span:nth-child(7)  { height: 26px; animation-delay: 0.90s; }
+  .wave-signature span:nth-child(8)  { height: 8px;  animation-delay: 1.05s; }
+  .wave-signature span:nth-child(9)  { height: 20px; animation-delay: 1.20s; }
+  .wave-signature span:nth-child(10) { height: 34px; animation-delay: 1.35s; }
+  .wave-signature span:nth-child(11) { height: 14px; animation-delay: 1.50s; }
   @keyframes wave-idle {
-    0%, 100% { transform: scaleY(0.6); }
-    50%      { transform: scaleY(1); }
+    0%, 100% { transform: scaleY(0.55); opacity: 0.2; }
+    50%       { transform: scaleY(1);    opacity: 0.55; }
   }
 
-  /* ---- Card ---- */
+  /* ── Card ── */
   .card {
-    background: var(--paper);
-    color: var(--ink);
-    border-radius: 20px;
-    padding: 40px;
-    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.5);
+    background: var(--card-bg);
+    color: var(--card-ink);
+    border-radius: 24px;
+    padding: 44px;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.06),
+      0 40px 80px -24px rgba(0,0,0,0.7),
+      0 8px 24px -8px rgba(0,0,0,0.3);
   }
 
+  /* ── Drop zone ── */
   .drop {
-    border: 2px dashed rgba(20, 24, 31, 0.22);
-    border-radius: 14px;
-    padding: 40px 24px;
+    display: block;
+    border: 1.5px dashed var(--card-border);
+    border-radius: 16px;
+    padding: 44px 24px;
     text-align: center;
     cursor: pointer;
     transition: border-color 0.2s, background 0.2s;
     position: relative;
+    background: transparent;
   }
   .drop:hover, .drop.dragover {
-    border-color: var(--amber-dim);
-    background: rgba(232, 163, 61, 0.06);
+    border-color: rgba(17,17,17,0.35);
+    background: var(--card-faint);
   }
   .drop input { display: none; }
 
   .drop-icon {
-    font-size: 32px;
-    margin-bottom: 12px;
-    display: block;
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 16px;
+    border-radius: 12px;
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
+  .drop-icon svg { display: block; }
 
   .drop-text {
     font-size: 15px;
-    font-weight: 500;
+    font-weight: 600;
+    color: var(--card-ink);
+    margin-bottom: 6px;
   }
   .drop-text span {
-    color: var(--amber-dim);
     text-decoration: underline;
+    text-underline-offset: 3px;
   }
-
   .drop-sub {
     font-size: 13px;
-    color: rgba(20,24,31,0.5);
-    margin-top: 6px;
+    color: var(--card-dim);
+    font-weight: 400;
   }
 
   .filename {
     margin-top: 14px;
     font-size: 14px;
-    font-weight: 600;
-    color: var(--ink);
+    font-weight: 700;
+    color: var(--card-ink);
     display: none;
   }
 
+  /* ── Controls ── */
   .controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -171,11 +216,11 @@
 
   .field label {
     display: block;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: rgba(20,24,31,0.55);
+    letter-spacing: 0.1em;
+    color: var(--card-dim);
     margin-bottom: 8px;
   }
 
@@ -183,133 +228,275 @@
     width: 100%;
     padding: 12px 14px;
     border-radius: 10px;
-    border: 1.5px solid rgba(20,24,31,0.16);
+    border: 1.5px solid var(--card-border);
     background: #fff;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Manrope', sans-serif;
     font-size: 14px;
-    color: var(--ink);
+    font-weight: 500;
+    color: var(--card-ink);
     cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23555' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+    transition: border-color 0.15s;
   }
+  select:focus { outline: none; border-color: #111; }
 
-  button.convert {
+  /* ── Convert button ── */
+  .btn-convert {
     width: 100%;
     margin-top: 28px;
-    padding: 16px;
+    padding: 17px;
     border-radius: 12px;
     border: none;
-    background: var(--ink);
-    color: var(--paper);
-    font-family: 'Inter', sans-serif;
+    background: #111;
+    color: #f5f5f5;
+    font-family: 'Manrope', sans-serif;
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: 0.02em;
     cursor: pointer;
-    transition: transform 0.15s, background 0.2s;
+    transition: background 0.15s, transform 0.12s;
+    position: relative;
+    overflow: hidden;
   }
-  button.convert:hover { background: var(--ink-soft); }
-  button.convert:active { transform: scale(0.98); }
-  button.convert:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-convert::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .btn-convert:hover { background: #1e1e1e; transform: translateY(-1px); }
+  .btn-convert:active { transform: scale(0.99) translateY(0); }
+  .btn-convert:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
+  /* ── Status (Analog Clock) ── */
   .status {
-    margin-top: 20px;
+    margin-top: 32px;
     display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--card-border);
+  }
+
+  .clock-container {
+    position: relative;
+    width: 160px;
+    height: 160px;
+  }
+  #clockSvg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .face-ring {
+    fill: none;
+    stroke: #111;
+    stroke-width: 1.5;
+  }
+  #sweepArc {
+    fill: none;
+    stroke: #111;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .tick { stroke: rgba(17,17,17,0.18); stroke-width: 1; }
+  .tick-major { stroke: #111; stroke-width: 1.5; }
+  #handMinute, #handHour {
+    stroke-linecap: round;
+    transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: 100px 100px;
+  }
+  #handMinute { stroke: #111; stroke-width: 2.5; }
+  #handHour   { stroke: rgba(17,17,17,0.35); stroke-width: 1.5; }
+  .center-dot { fill: #111; }
+  #etaLabel {
+    font-family: 'Manrope', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    fill: #111;
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+  #etaSub {
+    font-family: 'Manrope', sans-serif;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    fill: rgba(17,17,17,0.4);
+    text-anchor: middle;
+    text-transform: uppercase;
   }
 
   .status-line {
-    font-size: 14px;
-    color: rgba(20,24,31,0.7);
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
-    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(17,17,17,0.65);
+    text-align: center;
+    max-width: 320px;
+    line-height: 1.4;
   }
-
   .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(20,24,31,0.2);
-    border-top-color: var(--amber-dim);
+    width: 16px; height: 16px;
+    border: 2px solid rgba(17,17,17,0.12);
+    border-top-color: #111;
     border-radius: 50%;
-    animation: spin 0.7s linear infinite;
+    animation: spin 0.75s linear infinite;
     flex-shrink: 0;
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
 
   .progress-track {
-    width: 100%;
-    height: 8px;
-    background: rgba(20,24,31,0.1);
+    width: 160px;
+    height: 2px;
+    background: rgba(17,17,17,0.08);
     border-radius: 999px;
     overflow: hidden;
   }
   .progress-fill {
     height: 100%;
-    background: var(--amber-dim);
+    background: #111;
     border-radius: 999px;
     width: 0%;
-    transition: width 0.4s ease;
+    transition: width 0.8s ease;
   }
-
   .status-meta {
-    display: flex;
-    justify-content: space-between;
     font-size: 12px;
-    color: rgba(20,24,31,0.5);
-    margin-top: 8px;
+    color: rgba(17,17,17,0.4);
+    font-weight: 600;
+    text-align: center;
   }
 
+  /* ── Error ── */
   .error {
     margin-top: 20px;
     padding: 14px 16px;
-    border-radius: 10px;
-    background: rgba(200, 60, 40, 0.1);
+    border-radius: 12px;
+    background: rgba(200, 60, 40, 0.08);
+    border: 1px solid rgba(200, 60, 40, 0.15);
     color: #a3341f;
     font-size: 14px;
+    font-weight: 500;
     display: none;
+    line-height: 1.5;
   }
 
+  /* ── Result & Visualizer Orb ── */
   .result {
     margin-top: 28px;
     padding-top: 28px;
-    border-top: 1px solid rgba(20,24,31,0.12);
+    border-top: 1px solid var(--card-border);
     display: none;
+  }
+
+  .visualizer-container {
+    width: 100%;
+    height: 240px;
+    background: #080808;
+    border-radius: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Orb glowing backgrounds */
+  .orb-glow {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 70%);
+    filter: blur(20px);
+    width: 220px;
+    height: 220px;
+    transform: scale(0.8);
+    pointer-events: none;
+  }
+  .orb-svg {
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    overflow: visible;
+    pointer-events: none;
+  }
+  .orb-path {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.85);
+    stroke-width: 1.5;
+  }
+  .orb-path-inner {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 1;
+  }
+  .orb-core {
+    width: 64px;
+    height: 64px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 
+      0 0 25px 8px rgba(255, 255, 255, 0.45),
+      0 0 50px 16px rgba(255, 255, 255, 0.2);
+    z-index: 3;
+    transition: transform 0.1s ease-out;
   }
 
   .result-meta {
     font-size: 13px;
-    color: rgba(20,24,31,0.55);
-    margin-bottom: 14px;
+    color: var(--card-dim);
+    margin-bottom: 16px;
+    font-weight: 600;
   }
 
   audio {
     width: 100%;
-    height: 44px;
+    height: 40px;
+    accent-color: #111;
   }
 
   .download-link {
-    display: inline-block;
-    margin-top: 14px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--amber-dim);
-    text-decoration: none;
-  }
-  .download-link:hover { text-decoration: underline; }
-
-  footer {
-    margin-top: 48px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 18px;
     font-size: 13px;
-    color: rgba(246, 241, 228, 0.4);
+    font-weight: 700;
+    color: #111;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+  }
+  .download-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .download-link svg { display: block; }
+
+  /* ── Footer ── */
+  footer {
+    margin-top: 56px;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(245,245,245,0.22);
     text-align: center;
+    letter-spacing: 0.04em;
   }
 
   @media (max-width: 560px) {
     .controls { grid-template-columns: 1fr; }
     .card { padding: 28px 22px; }
+    h1 { font-size: 38px; }
   }
 </style>
 </head>
 <body>
-<div class="grain"></div>
+
 <div class="wrap">
 
   <header>
@@ -317,20 +504,29 @@
     <h1>Turn any PDF<br>into <em>something you can hear.</em></h1>
     <p class="sub">Drop in a document, pick a voice, and listen instead of reading. Free, no account needed.</p>
     <div class="wave-signature">
-      <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span>
     </div>
   </header>
 
   <div class="card">
     <form id="convertForm">
+      <!-- Upload Drop Zone -->
       <label class="drop" id="dropZone">
         <input type="file" id="pdfInput" name="pdf" accept="application/pdf">
-        <span class="drop-icon">📄</span>
+        <div class="drop-icon">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M11 14V4M11 4L7 8M11 4l4 4" stroke="#f5f5f5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 16v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke="#f5f5f5" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </div>
         <div class="drop-text">Drag your PDF here, or <span>browse</span></div>
-        <div class="drop-sub">Up to 25MB · text-based PDFs only</div>
+        <div class="drop-sub">Up to 25 MB · PDF only</div>
         <div class="filename" id="fileName"></div>
       </label>
 
+      <!-- Dropdowns -->
       <div class="controls">
         <div class="field">
           <label for="voiceSelect">Voice</label>
@@ -350,29 +546,70 @@
         </div>
       </div>
 
-      <button type="submit" class="convert" id="convertBtn">Convert to audio</button>
+      <button type="submit" class="btn-convert" id="convertBtn">Convert to audio</button>
 
+      <!-- Status (Analog Clock face) -->
       <div class="status" id="statusBox">
+        <div class="clock-container">
+          <svg id="clockSvg" viewBox="0 0 200 200">
+            <circle class="face-ring" cx="100" cy="100" r="88"/>
+            <g id="clockTicks"></g>
+            <circle
+              id="sweepArc"
+              cx="100" cy="100" r="88"
+              stroke-dasharray="552.92"
+              stroke-dashoffset="552.92"
+              transform="rotate(-90 100 100)"
+            />
+            <line id="handHour" x1="100" y1="100" x2="100" y2="46"/>
+            <line id="handMinute" x1="100" y1="100" x2="100" y2="30"/>
+            <circle class="center-dot" cx="100" cy="100" r="4"/>
+            <text id="etaLabel" x="100" y="97">0s</text>
+            <text id="etaSub" x="100" y="116">remaining</text>
+          </svg>
+        </div>
+
         <div class="status-line">
           <div class="spinner"></div>
           <span id="statusText">Starting...</span>
         </div>
+
         <div class="progress-track">
           <div class="progress-fill" id="progressFill"></div>
         </div>
+
         <div class="status-meta">
           <span id="progressPages"></span>
-          <span id="progressEta"></span>
         </div>
       </div>
 
+      <!-- Errors -->
       <div class="error" id="errorBox"></div>
 
+      <!-- Result & Orb visualizer -->
       <div class="result" id="resultBox">
+        <div class="visualizer-container">
+          <div class="orb-glow" id="orbGlow1"></div>
+          <div class="orb-glow" id="orbGlow2" style="transform: scale(0.65); opacity: 0.55;"></div>
+          
+          <svg class="orb-svg" viewBox="0 0 200 200">
+            <path class="orb-path-inner" id="orbInnerPath" d=""></path>
+            <path class="orb-path" id="orbOuterPath" d=""></path>
+          </svg>
+
+          <div class="orb-core" id="orbCore"></div>
+        </div>
+
         <div class="result-meta" id="resultMeta"></div>
         <audio id="audioPlayer" controls></audio>
         <br>
-        <a href="#" class="download-link" id="downloadLink" download="audio.mp3">Download mp3 →</a>
+        <a href="#" class="download-link" id="downloadLink" download="audio.mp3">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 9V2M7 9L4 6M7 9l3-3" stroke="#111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 11h10" stroke="#111" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Download mp3
+        </a>
       </div>
     </form>
   </div>
@@ -390,15 +627,35 @@ const statusBox    = document.getElementById('statusBox');
 const statusText   = document.getElementById('statusText');
 const progressFill = document.getElementById('progressFill');
 const progressPages= document.getElementById('progressPages');
-const progressEta  = document.getElementById('progressEta');
 const errorBox     = document.getElementById('errorBox');
 const resultBox    = document.getElementById('resultBox');
 const resultMeta   = document.getElementById('resultMeta');
 const audioPlayer  = document.getElementById('audioPlayer');
 const downloadLink = document.getElementById('downloadLink');
 
+// ── Draw clock tick marks ──
+const clockTicks = document.getElementById('clockTicks');
+const CX = 100, CY = 100, R = 88;
+for (let i = 0; i < 60; i++) {
+  const isMajor = i % 5 === 0;
+  const angle = (i / 60) * Math.PI * 2 - Math.PI / 2;
+  const outer = R;
+  const inner = isMajor ? R - 10 : R - 5;
+  const x1 = CX + Math.cos(angle) * outer;
+  const y1 = CY + Math.sin(angle) * outer;
+  const x2 = CX + Math.cos(angle) * inner;
+  const y2 = CY + Math.sin(angle) * inner;
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+  line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+  line.setAttribute('class', isMajor ? 'tick-major' : 'tick');
+  clockTicks.appendChild(line);
+}
+
+const CIRCUMFERENCE = 2 * Math.PI * R; // 552.92
 let pollTimer = null;
 
+// ── File upload drag and drop handlers ──
 pdfInput.addEventListener('change', () => {
   if (pdfInput.files.length) {
     fileName.textContent = pdfInput.files[0].name;
@@ -420,15 +677,16 @@ dropZone.addEventListener('drop', e => {
   }
 });
 
-function formatEta(seconds) {
-  if (seconds === null || seconds === undefined) return '';
-  if (seconds < 1) return 'almost done';
-  if (seconds < 60) return `~${seconds}s left`;
+function formatClockEta(seconds) {
+  if (seconds === null || seconds === undefined) return '0s';
+  if (seconds < 1) return '0s';
+  if (seconds < 60) return `${seconds}s`;
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
-  return `~${mins}m ${secs}s left`;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+// ── Render progress updates ──
 function renderProgress(job) {
   let percent = 0;
   let pagesLabel = '';
@@ -436,7 +694,7 @@ function renderProgress(job) {
   if (job.phase === 'extracting' || job.phase === 'ocr') {
     const done = job.pages_done || 0;
     const total = job.pages_total || 1;
-    percent = (done / total) * 40; // extraction = first 40% of bar
+    percent = (done / total) * 40; // extraction/OCR = first 40% of progress
     pagesLabel = `Page ${done} of ${total}`;
     statusText.textContent = job.phase === 'ocr'
       ? `Running OCR on page ${job.ocr_page_number || done}... (scanned page detected)`
@@ -444,18 +702,136 @@ function renderProgress(job) {
   } else if (job.phase === 'converting') {
     const done = job.chunks_done || 0;
     const total = job.chunks_total || 1;
-    percent = 40 + (done / total) * 60; // conversion = remaining 60%
+    percent = 40 + (done / total) * 60; // TTS conversion = remaining 60%
     pagesLabel = job.ocr_used ? 'OCR was used on part of this document' : '';
     statusText.textContent = `Converting to audio... part ${done} of ${total}`;
   } else if (job.phase === 'starting') {
     statusText.textContent = 'Starting...';
   }
 
+  // Update progress bar
   progressFill.style.width = `${Math.min(percent, 100)}%`;
   progressPages.textContent = pagesLabel;
-  progressEta.textContent = formatEta(job.eta_seconds);
+
+  // Update analog clock state
+  const normProgress = Math.min(percent / 100, 1.0);
+  const offset = CIRCUMFERENCE * (1 - normProgress);
+  document.getElementById('sweepArc').style.strokeDashoffset = offset;
+
+  // Clock hands: Minute hand makes 1 full sweep. Hour hand moves 1/12th of that.
+  const minuteDeg = normProgress * 360;
+  document.getElementById('handMinute').style.transform = `rotate(${minuteDeg}deg)`;
+  const hourDeg = (normProgress * 360) * (1 / 12);
+  document.getElementById('handHour').style.transform = `rotate(${hourDeg}deg)`;
+
+  // Clock center label text
+  document.getElementById('etaLabel').textContent = formatClockEta(job.eta_seconds);
 }
 
+// ── Voice Reactive Orb visualizer loop ──
+let audioCtx = null;
+let analyser = null;
+let sourceNode = null;
+let dataArray = null;
+let visualFrameId = null;
+let angleOffset = 0;
+
+const orbCore = document.getElementById('orbCore');
+const orbGlow1 = document.getElementById('orbGlow1');
+const orbGlow2 = document.getElementById('orbGlow2');
+const orbOuterPath = document.getElementById('orbOuterPath');
+const orbInnerPath = document.getElementById('orbInnerPath');
+
+function initVisualizer() {
+  if (audioCtx) return;
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 64; // Small fft for simple low frequency orb reactivity
+  const bufferLength = analyser.frequencyBinCount;
+  dataArray = new Uint8Array(bufferLength);
+
+  sourceNode = audioCtx.createMediaElementSource(audioPlayer);
+  sourceNode.connect(analyser);
+  analyser.connect(audioCtx.destination);
+
+  updateVisuals();
+}
+
+function updateVisuals() {
+  visualFrameId = requestAnimationFrame(updateVisuals);
+  if (!analyser) return;
+
+  analyser.getByteFrequencyData(dataArray);
+
+  // Focus on low/mid vocal frequencies (first 8 bins)
+  let sum = 0;
+  let voiceBins = 8;
+  for (let i = 0; i < voiceBins; i++) {
+    sum += dataArray[i];
+  }
+  const avg = sum / voiceBins;
+  const normVolume = avg / 255; // 0.0 to 1.0
+
+  // 1. Scale center core & blur offsets
+  const scale = 1 + normVolume * 0.55;
+  orbCore.style.transform = `scale(${scale})`;
+  
+  orbGlow1.style.transform = `scale(${0.8 + normVolume * 0.7})`;
+  orbGlow1.style.opacity = `${0.2 + normVolume * 0.8}`;
+  orbGlow2.style.transform = `scale(${0.6 + normVolume * 0.45})`;
+  orbGlow2.style.opacity = `${0.35 + normVolume * 0.65}`;
+
+  // 2. Morph vector outlines
+  angleOffset += 0.035 + normVolume * 0.08;
+  const points = 16;
+  const cx = 100, cy = 100;
+  let dOuter = '';
+  let dInner = '';
+
+  for (let i = 0; i < points; i++) {
+    const angle = (i / points) * Math.PI * 2 + angleOffset;
+    const freqIndex = i % dataArray.length;
+    const freqVal = dataArray[freqIndex];
+    const normFreq = freqVal / 255;
+
+    const baseRadiusOuter = 55;
+    const rOuter = baseRadiusOuter + normFreq * 24 * (i % 2 === 0 ? 1 : 0.65);
+
+    const baseRadiusInner = 40;
+    const rInner = baseRadiusInner + normFreq * 8;
+
+    const xOuter = cx + Math.cos(angle) * rOuter;
+    const yOuter = cy + Math.sin(angle) * rOuter;
+
+    const xInner = cx + Math.cos(angle) * rInner;
+    const yInner = cy + Math.sin(angle) * rInner;
+
+    if (i === 0) {
+      dOuter += `M ${xOuter} ${yOuter}`;
+      dInner += `M ${xInner} ${yInner}`;
+    } else {
+      dOuter += ` L ${xOuter} ${yOuter}`;
+      dInner += ` L ${xInner} ${yInner}`;
+    }
+  }
+
+  dOuter += ' Z';
+  dInner += ' Z';
+
+  orbOuterPath.setAttribute('d', dOuter);
+  orbInnerPath.setAttribute('d', dInner);
+}
+
+// User-gesture triggers audio context resume
+audioPlayer.addEventListener('play', () => {
+  initVisualizer();
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+});
+
+// ── Poll for conversion job status ──
 async function pollJob(jobId) {
   try {
     const res = await fetch(`/progress/${jobId}`);
@@ -491,6 +867,7 @@ async function pollJob(jobId) {
   }
 }
 
+// ── Form submission ──
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   errorBox.style.display = 'none';
@@ -503,11 +880,16 @@ form.addEventListener('submit', async (e) => {
   }
 
   convertBtn.disabled = true;
-  statusBox.style.display = 'block';
+  statusBox.style.display = 'flex';
   progressFill.style.width = '0%';
   progressPages.textContent = '';
-  progressEta.textContent = '';
   statusText.textContent = 'Uploading...';
+
+  // Reset clock visuals
+  document.getElementById('sweepArc').style.strokeDashoffset = CIRCUMFERENCE;
+  document.getElementById('handMinute').style.transform = 'rotate(0deg)';
+  document.getElementById('handHour').style.transform = 'rotate(0deg)';
+  document.getElementById('etaLabel').textContent = '0s';
 
   const formData = new FormData(form);
 

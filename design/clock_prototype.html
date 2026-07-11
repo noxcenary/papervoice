@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Papervoice — Analog Clock Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #ffffff;
+    font-family: 'Manrope', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    color: #111;
+    padding: 40px 24px;
+    gap: 32px;
+  }
+
+  h2 {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(17,17,17,0.4);
+  }
+
+  /* ── Clock face ── */
+  .clock-wrap {
+    position: relative;
+    width: 200px;
+    height: 200px;
+  }
+
+  #clockSvg {
+    width: 200px;
+    height: 200px;
+    overflow: visible;
+  }
+
+  /* Clock face ring */
+  .face-ring {
+    fill: none;
+    stroke: #111;
+    stroke-width: 1.5;
+  }
+
+  /* Sweep arc (countdown arc filling clockwise as time elapses) */
+  #sweepArc {
+    fill: none;
+    stroke: #111;
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Tick marks */
+  .tick { stroke: rgba(17,17,17,0.2); stroke-width: 1; }
+  .tick-major { stroke: #111; stroke-width: 1.5; }
+
+  /* Hands */
+  #handMinute, #handHour {
+    stroke-linecap: round;
+    transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: 100px 100px;
+  }
+  #handMinute { stroke: #111; stroke-width: 2.5; }
+  #handHour   { stroke: rgba(17,17,17,0.35); stroke-width: 1.5; }
+
+  /* Center dot */
+  .center-dot { fill: #111; }
+
+  /* ETA label inside clock */
+  #etaLabel {
+    font-family: 'Manrope', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    fill: #111;
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+  #etaSub {
+    font-family: 'Manrope', sans-serif;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    fill: rgba(17,17,17,0.4);
+    text-anchor: middle;
+    text-transform: uppercase;
+  }
+
+  /* ── Status text below clock ── */
+  .status-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(17,17,17,0.6);
+    text-align: center;
+  }
+
+  /* ── Progress bar ── */
+  .bar-wrap {
+    width: 200px;
+    height: 2px;
+    background: rgba(17,17,17,0.08);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  #barFill {
+    height: 100%;
+    background: #111;
+    border-radius: 999px;
+    width: 0%;
+    transition: width 0.8s ease;
+  }
+
+  /* ── Demo controls ── */
+  .demo-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(17,17,17,0.08);
+    width: 300px;
+  }
+  .demo-controls p {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(17,17,17,0.35);
+  }
+  .demo-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+  }
+  .demo-row label {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(17,17,17,0.5);
+    min-width: 80px;
+  }
+  input[type=range] {
+    flex: 1;
+    accent-color: #111;
+    cursor: pointer;
+  }
+  .demo-row span {
+    font-size: 12px;
+    font-weight: 700;
+    color: #111;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  .btn-demo {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(17,17,17,0.15);
+    background: transparent;
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #111;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-demo:hover { background: rgba(17,17,17,0.04); }
+  .btn-demo.active { background: #111; color: #fff; border-color: #111; }
+</style>
+</head>
+<body>
+
+<h2>Analog Countdown Clock — Prototype</h2>
+
+<div class="clock-wrap">
+  <svg id="clockSvg" viewBox="0 0 200 200">
+    <!-- Outer ring -->
+    <circle class="face-ring" cx="100" cy="100" r="88"/>
+
+    <!-- Tick marks (60 minor, 12 major) -->
+    <g id="ticks"></g>
+
+    <!-- Countdown sweep arc (filled as time elapses, empties as time remains) -->
+    <!-- Arc starts at top (−90°), drawn clockwise. Full circle = 552.9 circumference of r=88 -->
+    <circle
+      id="sweepArc"
+      cx="100" cy="100" r="88"
+      stroke-dasharray="552.92"
+      stroke-dashoffset="552.92"
+      transform="rotate(-90 100 100)"
+    />
+
+    <!-- Hour hand (shows ratio of total duration) -->
+    <line id="handHour" x1="100" y1="100" x2="100" y2="46"/>
+
+    <!-- Minute hand (sweeps 360° over total duration) -->
+    <line id="handMinute" x1="100" y1="100" x2="100" y2="30"/>
+
+    <!-- Center dot -->
+    <circle class="center-dot" cx="100" cy="100" r="4"/>
+
+    <!-- ETA label -->
+    <text id="etaLabel" x="100" y="97">0:00</text>
+    <text id="etaSub" x="100" y="116">remaining</text>
+  </svg>
+</div>
+
+<div class="status-text" id="statusLabel">Converting to audio... part 3 of 12</div>
+
+<div class="bar-wrap">
+  <div id="barFill"></div>
+</div>
+
+<div class="demo-controls">
+  <p>Demo controls</p>
+  <div class="demo-row">
+    <label>Total (s)</label>
+    <input type="range" id="totalSlider" min="30" max="600" value="300" step="10">
+    <span id="totalVal">300s</span>
+  </div>
+  <div class="demo-row">
+    <label>Remaining (s)</label>
+    <input type="range" id="remainSlider" min="0" max="300" value="240" step="5">
+    <span id="remainVal">240s</span>
+  </div>
+  <button class="btn-demo" id="animBtn">▶ Simulate live countdown</button>
+</div>
+
+<script>
+// ── Draw tick marks ──
+const ticks = document.getElementById('ticks');
+const CX = 100, CY = 100, R = 88;
+for (let i = 0; i < 60; i++) {
+  const isMajor = i % 5 === 0;
+  const angle = (i / 60) * Math.PI * 2 - Math.PI / 2;
+  const outer = R;
+  const inner = isMajor ? R - 10 : R - 5;
+  const x1 = CX + Math.cos(angle) * outer;
+  const y1 = CY + Math.sin(angle) * outer;
+  const x2 = CX + Math.cos(angle) * inner;
+  const y2 = CY + Math.sin(angle) * inner;
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+  line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+  line.setAttribute('class', isMajor ? 'tick-major' : 'tick');
+  ticks.appendChild(line);
+}
+
+// ── Clock state ──
+const CIRCUMFERENCE = 2 * Math.PI * R; // 552.92
+
+function setClockState(totalSeconds, remainingSeconds) {
+  remainingSeconds = Math.max(0, Math.min(totalSeconds, remainingSeconds));
+  const elapsed = totalSeconds - remainingSeconds;
+  const progress = totalSeconds > 0 ? elapsed / totalSeconds : 0;
+
+  // Sweep arc: empty circle = full remaining; fills as time elapses
+  const offset = CIRCUMFERENCE * (1 - progress);
+  document.getElementById('sweepArc').style.strokeDashoffset = offset;
+
+  // Minute hand: sweeps 360° over full duration
+  const minuteDeg = progress * 360;
+  document.getElementById('handMinute').style.transform = `rotate(${minuteDeg}deg)`;
+
+  // Hour hand: 1 revolution per 60min block, or slower for short durations
+  const hourDeg = (progress * 360) * (1 / 12);
+  document.getElementById('handHour').style.transform = `rotate(${hourDeg}deg)`;
+
+  // ETA label
+  const m = Math.floor(remainingSeconds / 60);
+  const s = Math.floor(remainingSeconds % 60);
+  document.getElementById('etaLabel').textContent =
+    m > 0 ? `${m}:${s.toString().padStart(2,'0')}` : `${s}s`;
+
+  // Progress bar
+  document.getElementById('barFill').style.width = `${progress * 100}%`;
+
+  // Status text
+  const partsDone = Math.floor(progress * 12);
+  document.getElementById('statusLabel').textContent =
+    remainingSeconds <= 0
+      ? 'Done ✓'
+      : `Converting to audio… part ${partsDone + 1} of 12`;
+}
+
+// ── Slider controls ──
+const totalSlider  = document.getElementById('totalSlider');
+const remainSlider = document.getElementById('remainSlider');
+const totalVal     = document.getElementById('totalVal');
+const remainVal    = document.getElementById('remainVal');
+
+function syncSliders() {
+  const total = parseInt(totalSlider.value);
+  remainSlider.max = total;
+  if (parseInt(remainSlider.value) > total) remainSlider.value = total;
+  totalVal.textContent  = `${total}s`;
+  remainVal.textContent = `${remainSlider.value}s`;
+  setClockState(total, parseInt(remainSlider.value));
+}
+
+totalSlider.addEventListener('input', syncSliders);
+remainSlider.addEventListener('input', () => {
+  remainVal.textContent = `${remainSlider.value}s`;
+  setClockState(parseInt(totalSlider.value), parseInt(remainSlider.value));
+});
+
+// ── Simulate live countdown ──
+let simTimer = null;
+const animBtn = document.getElementById('animBtn');
+animBtn.addEventListener('click', () => {
+  if (simTimer) {
+    clearInterval(simTimer);
+    simTimer = null;
+    animBtn.textContent = '▶ Simulate live countdown';
+    animBtn.classList.remove('active');
+    return;
+  }
+  animBtn.textContent = '⏹ Stop simulation';
+  animBtn.classList.add('active');
+
+  const total = parseInt(totalSlider.value);
+  let remaining = total;
+  remainSlider.value = remaining;
+  syncSliders();
+
+  simTimer = setInterval(() => {
+    remaining -= 2;
+    if (remaining <= 0) {
+      remaining = 0;
+      clearInterval(simTimer);
+      simTimer = null;
+      animBtn.textContent = '▶ Simulate live countdown';
+      animBtn.classList.remove('active');
+    }
+    remainSlider.value = remaining;
+    remainVal.textContent = `${remaining}s`;
+    setClockState(total, remaining);
+  }, 100); // fast for demo — real app uses 1200ms poll interval
+});
+
+// Init
+syncSliders();
+</script>
+</body>
+</html>
