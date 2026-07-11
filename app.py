@@ -188,6 +188,7 @@ def extract_text_with_progress(pdf_path: Path, job_id: str) -> str:
 
     pages_text = []
     ocr_used = False
+    extraction_start = time.time()
 
     for i, page in enumerate(reader.pages):
         text = extract_page_text(page)
@@ -205,7 +206,8 @@ def extract_text_with_progress(pdf_path: Path, job_id: str) -> str:
                 update_job(job_id, ocr_error=str(e))
 
         pages_text.append(text)
-        update_job(job_id, pages_done=i + 1, phase="extracting")
+        update_job(job_id, pages_done=i + 1, phase="extracting",
+                   eta_seconds=round(((total_pages - (i + 1)) * (time.time() - extraction_start)) / (i + 1)))
 
     # Remove headers/footers and standalone page numbers before joining.
     # Both passes operate on the full page list so the 60% threshold has

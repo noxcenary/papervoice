@@ -1,6 +1,6 @@
 flask
 edge-tts
-pypdf
+pypdf==6.10.2
 gunicorn
 pytesseract
 pdf2image

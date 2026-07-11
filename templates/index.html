@@ -310,8 +310,6 @@
   .tick-major { stroke: #111; stroke-width: 1.5; }
   #handMinute, #handHour {
     stroke-linecap: round;
-    transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-    transform-origin: 100px 100px;
   }
   #handMinute { stroke: #111; stroke-width: 2.5; }
   #handHour   { stroke: rgba(17,17,17,0.35); stroke-width: 1.5; }
@@ -720,9 +718,9 @@ function renderProgress(job) {
 
   // Clock hands: Minute hand makes 1 full sweep. Hour hand moves 1/12th of that.
   const minuteDeg = normProgress * 360;
-  document.getElementById('handMinute').style.transform = `rotate(${minuteDeg}deg)`;
+  document.getElementById('handMinute').setAttribute('transform', `rotate(${minuteDeg} 100 100)`);
   const hourDeg = (normProgress * 360) * (1 / 12);
-  document.getElementById('handHour').style.transform = `rotate(${hourDeg}deg)`;
+  document.getElementById('handHour').setAttribute('transform', `rotate(${hourDeg} 100 100)`);
 
   // Clock center label text
   document.getElementById('etaLabel').textContent = formatClockEta(job.eta_seconds);
