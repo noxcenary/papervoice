@@ -897,8 +897,8 @@ form.addEventListener('submit', async (e) => {
 
   // Reset clock visuals
   document.getElementById('sweepArc').style.strokeDashoffset = CIRCUMFERENCE;
-  document.getElementById('handMinute').style.transform = 'rotate(0deg)';
-  document.getElementById('handHour').style.transform = 'rotate(0deg)';
+  document.getElementById('handMinute').setAttribute('transform', 'rotate(0 100 100)');
+  document.getElementById('handHour').setAttribute('transform', 'rotate(0 100 100)');
   document.getElementById('etaLabel').textContent = '0s';
 
   const formData = new FormData(form);
