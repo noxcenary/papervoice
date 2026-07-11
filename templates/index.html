@@ -722,8 +722,10 @@ function renderProgress(job) {
   const hourDeg = (normProgress * 360) * (1 / 12);
   document.getElementById('handHour').setAttribute('transform', `rotate(${hourDeg} 100 100)`);
 
-  // Clock center label text
-  document.getElementById('etaLabel').textContent = formatClockEta(job.eta_seconds);
+  // Clock center label text — skip first 2 pages to avoid noisy single-page extrapolation
+  const pagesSeen = job.pages_done || 0;
+  document.getElementById('etaLabel').textContent =
+    (pagesSeen < 3 && job.phase === 'extracting') ? '...' : formatClockEta(job.eta_seconds);
 }
 
 // ── Voice Reactive Orb visualizer loop ──
