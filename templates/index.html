@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Papervoice — Listen to any PDF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:       #14181F;
+    --ink-soft:  #1E2430;
+    --paper:     #F6F1E4;
+    --paper-dim: #E7DFCB;
+    --amber:     #E8A33D;
+    --amber-dim: #C8862A;
+    --line:      rgba(246, 241, 228, 0.14);
+    --text-dim:  rgba(246, 241, 228, 0.62);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .grain {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    z-index: 1;
+  }
+
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 72px 24px 100px;
+    position: relative;
+    z-index: 2;
+  }
+
+  header {
+    margin-bottom: 56px;
+  }
+
+  .eyebrow {
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+    font-weight: 600;
+    margin-bottom: 18px;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(40px, 7vw, 58px);
+    font-weight: 600;
+    line-height: 1.05;
+    margin: 0 0 20px;
+    letter-spacing: -0.01em;
+  }
+
+  h1 em {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--amber);
+  }
+
+  .sub {
+    font-size: 17px;
+    color: var(--text-dim);
+    max-width: 460px;
+    line-height: 1.6;
+  }
+
+  /* ---- Waveform signature ---- */
+  .wave-signature {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 40px;
+    margin: 28px 0 0;
+  }
+  .wave-signature span {
+    width: 4px;
+    background: var(--amber);
+    border-radius: 2px;
+    opacity: 0.85;
+    animation: wave-idle 2.4s ease-in-out infinite;
+  }
+  .wave-signature span:nth-child(1) { height: 12px; animation-delay: 0s; }
+  .wave-signature span:nth-child(2) { height: 24px; animation-delay: 0.15s; }
+  .wave-signature span:nth-child(3) { height: 36px; animation-delay: 0.3s; }
+  .wave-signature span:nth-child(4) { height: 18px; animation-delay: 0.45s; }
+  .wave-signature span:nth-child(5) { height: 30px; animation-delay: 0.6s; }
+  .wave-signature span:nth-child(6) { height: 14px; animation-delay: 0.75s; }
+  .wave-signature span:nth-child(7) { height: 26px; animation-delay: 0.9s; }
+
+  @keyframes wave-idle {
+    0%, 100% { transform: scaleY(0.6); }
+    50%      { transform: scaleY(1); }
+  }
+
+  /* ---- Card ---- */
+  .card {
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.5);
+  }
+
+  .drop {
+    border: 2px dashed rgba(20, 24, 31, 0.22);
+    border-radius: 14px;
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .drop:hover, .drop.dragover {
+    border-color: var(--amber-dim);
+    background: rgba(232, 163, 61, 0.06);
+  }
+  .drop input { display: none; }
+
+  .drop-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .drop-text {
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .drop-text span {
+    color: var(--amber-dim);
+    text-decoration: underline;
+  }
+
+  .drop-sub {
+    font-size: 13px;
+    color: rgba(20,24,31,0.5);
+    margin-top: 6px;
+  }
+
+  .filename {
+    margin-top: 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    display: none;
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 28px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(20,24,31,0.55);
+    margin-bottom: 8px;
+  }
+
+  select {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1.5px solid rgba(20,24,31,0.16);
+    background: #fff;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  button.convert {
+    width: 100%;
+    margin-top: 28px;
+    padding: 16px;
+    border-radius: 12px;
+    border: none;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.2s;
+  }
+  button.convert:hover { background: var(--ink-soft); }
+  button.convert:active { transform: scale(0.98); }
+  button.convert:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .status {
+    margin-top: 20px;
+    display: none;
+  }
+
+  .status-line {
+    font-size: 14px;
+    color: rgba(20,24,31,0.7);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(20,24,31,0.2);
+    border-top-color: var(--amber-dim);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(20,24,31,0.1);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--amber-dim);
+    border-radius: 999px;
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  .status-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: rgba(20,24,31,0.5);
+    margin-top: 8px;
+  }
+
+  .error {
+    margin-top: 20px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: rgba(200, 60, 40, 0.1);
+    color: #a3341f;
+    font-size: 14px;
+    display: none;
+  }
+
+  .result {
+    margin-top: 28px;
+    padding-top: 28px;
+    border-top: 1px solid rgba(20,24,31,0.12);
+    display: none;
+  }
+
+  .result-meta {
+    font-size: 13px;
+    color: rgba(20,24,31,0.55);
+    margin-bottom: 14px;
+  }
+
+  audio {
+    width: 100%;
+    height: 44px;
+  }
+
+  .download-link {
+    display: inline-block;
+    margin-top: 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--amber-dim);
+    text-decoration: none;
+  }
+  .download-link:hover { text-decoration: underline; }
+
+  footer {
+    margin-top: 48px;
+    font-size: 13px;
+    color: rgba(246, 241, 228, 0.4);
+    text-align: center;
+  }
+
+  @media (max-width: 560px) {
+    .controls { grid-template-columns: 1fr; }
+    .card { padding: 28px 22px; }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Papervoice</div>
+    <h1>Turn any PDF<br>into <em>something you can hear.</em></h1>
+    <p class="sub">Drop in a document, pick a voice, and listen instead of reading. Free, no account needed.</p>
+    <div class="wave-signature">
+      <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+  </header>
+
+  <div class="card">
+    <form id="convertForm">
+      <label class="drop" id="dropZone">
+        <input type="file" id="pdfInput" name="pdf" accept="application/pdf">
+        <span class="drop-icon">📄</span>
+        <div class="drop-text">Drag your PDF here, or <span>browse</span></div>
+        <div class="drop-sub">Up to 25MB · text-based PDFs only</div>
+        <div class="filename" id="fileName"></div>
+      </label>
+
+      <div class="controls">
+        <div class="field">
+          <label for="voiceSelect">Voice</label>
+          <select id="voiceSelect" name="voice">
+            {% for id, desc in voices.items() %}
+            <option value="{{ id }}">{{ desc }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="speedSelect">Speed</label>
+          <select id="speedSelect" name="speed">
+            <option value="-20">Slow</option>
+            <option value="0" selected>Normal</option>
+            <option value="20">Fast</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="convert" id="convertBtn">Convert to audio</button>
+
+      <div class="status" id="statusBox">
+        <div class="status-line">
+          <div class="spinner"></div>
+          <span id="statusText">Starting...</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="status-meta">
+          <span id="progressPages"></span>
+          <span id="progressEta"></span>
+        </div>
+      </div>
+
+      <div class="error" id="errorBox"></div>
+
+      <div class="result" id="resultBox">
+        <div class="result-meta" id="resultMeta"></div>
+        <audio id="audioPlayer" controls></audio>
+        <br>
+        <a href="#" class="download-link" id="downloadLink" download="audio.mp3">Download mp3 →</a>
+      </div>
+    </form>
+  </div>
+
+  <footer>Powered by Microsoft Edge TTS · Nothing you upload is stored</footer>
+</div>
+
+<script>
+const dropZone     = document.getElementById('dropZone');
+const pdfInput     = document.getElementById('pdfInput');
+const fileName     = document.getElementById('fileName');
+const form         = document.getElementById('convertForm');
+const convertBtn   = document.getElementById('convertBtn');
+const statusBox    = document.getElementById('statusBox');
+const statusText   = document.getElementById('statusText');
+const progressFill = document.getElementById('progressFill');
+const progressPages= document.getElementById('progressPages');
+const progressEta  = document.getElementById('progressEta');
+const errorBox     = document.getElementById('errorBox');
+const resultBox    = document.getElementById('resultBox');
+const resultMeta   = document.getElementById('resultMeta');
+const audioPlayer  = document.getElementById('audioPlayer');
+const downloadLink = document.getElementById('downloadLink');
+
+let pollTimer = null;
+
+pdfInput.addEventListener('change', () => {
+  if (pdfInput.files.length) {
+    fileName.textContent = pdfInput.files[0].name;
+    fileName.style.display = 'block';
+  }
+});
+
+['dragover', 'dragenter'].forEach(evt =>
+  dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.add('dragover'); })
+);
+['dragleave', 'drop'].forEach(evt =>
+  dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.remove('dragover'); })
+);
+dropZone.addEventListener('drop', e => {
+  if (e.dataTransfer.files.length) {
+    pdfInput.files = e.dataTransfer.files;
+    fileName.textContent = e.dataTransfer.files[0].name;
+    fileName.style.display = 'block';
+  }
+});
+
+function formatEta(seconds) {
+  if (seconds === null || seconds === undefined) return '';
+  if (seconds < 1) return 'almost done';
+  if (seconds < 60) return `~${seconds}s left`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `~${mins}m ${secs}s left`;
+}
+
+function renderProgress(job) {
+  let percent = 0;
+  let pagesLabel = '';
+
+  if (job.phase === 'extracting' || job.phase === 'ocr') {
+    const done = job.pages_done || 0;
+    const total = job.pages_total || 1;
+    percent = (done / total) * 40; // extraction = first 40% of bar
+    pagesLabel = `Page ${done} of ${total}`;
+    statusText.textContent = job.phase === 'ocr'
+      ? `Running OCR on page ${job.ocr_page_number || done}... (scanned page detected)`
+      : `Reading page ${done} of ${total}...`;
+  } else if (job.phase === 'converting') {
+    const done = job.chunks_done || 0;
+    const total = job.chunks_total || 1;
+    percent = 40 + (done / total) * 60; // conversion = remaining 60%
+    pagesLabel = job.ocr_used ? 'OCR was used on part of this document' : '';
+    statusText.textContent = `Converting to audio... part ${done} of ${total}`;
+  } else if (job.phase === 'starting') {
+    statusText.textContent = 'Starting...';
+  }
+
+  progressFill.style.width = `${Math.min(percent, 100)}%`;
+  progressPages.textContent = pagesLabel;
+  progressEta.textContent = formatEta(job.eta_seconds);
+}
+
+async function pollJob(jobId) {
+  try {
+    const res = await fetch(`/progress/${jobId}`);
+    const job = await res.json();
+
+    if (!res.ok || job.error) {
+      throw new Error(job.error || 'Job not found.');
+    }
+
+    if (job.status === 'error') {
+      throw new Error(job.error || 'Conversion failed.');
+    }
+
+    if (job.status === 'done') {
+      clearInterval(pollTimer);
+      resultMeta.textContent = `${(job.word_count || 0).toLocaleString()} words` +
+        (job.ocr_used ? ' · OCR used on scanned pages' : '');
+      audioPlayer.src = job.audio_url;
+      downloadLink.href = job.audio_url;
+      resultBox.style.display = 'block';
+      statusBox.style.display = 'none';
+      convertBtn.disabled = false;
+      return;
+    }
+
+    renderProgress(job);
+  } catch (err) {
+    clearInterval(pollTimer);
+    errorBox.textContent = err.message;
+    errorBox.style.display = 'block';
+    statusBox.style.display = 'none';
+    convertBtn.disabled = false;
+  }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorBox.style.display = 'none';
+  resultBox.style.display = 'none';
+
+  if (!pdfInput.files.length) {
+    errorBox.textContent = 'Please choose a PDF first.';
+    errorBox.style.display = 'block';
+    return;
+  }
+
+  convertBtn.disabled = true;
+  statusBox.style.display = 'block';
+  progressFill.style.width = '0%';
+  progressPages.textContent = '';
+  progressEta.textContent = '';
+  statusText.textContent = 'Uploading...';
+
+  const formData = new FormData(form);
+
+  try {
+    const res = await fetch('/convert', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      throw new Error(data.error || 'Something went wrong.');
+    }
+
+    pollTimer = setInterval(() => pollJob(data.job_id), 1200);
+  } catch (err) {
+    errorBox.textContent = err.message;
+    errorBox.style.display = 'block';
+    statusBox.style.display = 'none';
+    convertBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

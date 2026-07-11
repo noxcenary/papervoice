@@ -1,0 +1,7 @@
+flask
+edge-tts
+pypdf
+gunicorn
+pytesseract
+pdf2image
+Pillow
