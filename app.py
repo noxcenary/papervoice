@@ -11,8 +11,8 @@ requirements and in-memory job storage.
 """
 
 import asyncio
-import io
 import os
+import sqlite3
 import threading
 import time
 import uuid
@@ -47,16 +47,70 @@ MAX_CHARS_PER_CHUNK = 8000
 MIN_WORDS_PER_PAGE_BEFORE_OCR = 20  # below this, assume scanned & try OCR
 
 # ══════════════════════════════════════════════════════════════════════════
-# ⚠️  IN-MEMORY JOB STORE
-#
-# See ISSUES.md #4 — this will NOT work correctly across multiple gunicorn
-# workers, since each worker has its own copy of this dict. A poll request
-# can land on a worker that never processed the job and get a false 404.
-# Fine for local testing / single-worker deploys. Needs Redis/SQLite for
-# anything more robust.
+# 🗄️  SQLITE JOB STORE — persists across process restarts within the same
+# container.  Survives worker crashes, health-check restarts, and brief
+# hiccups, but *not* a full redeploy (Render wipes /tmp on deploy).
+# See ISSUES.md for limits.  Single-file, zero external deps.
 # ══════════════════════════════════════════════════════════════════════════
-JOBS = {}
-JOBS_LOCK = threading.Lock()
+DB_PATH = os.environ.get("JOBS_DB_PATH", "/tmp/jobs.db")
+
+_SQL_INIT = """
+CREATE TABLE IF NOT EXISTS jobs (
+    job_id       TEXT PRIMARY KEY,
+    status       TEXT DEFAULT 'processing',
+    phase        TEXT DEFAULT 'starting',
+    pages_total  INTEGER,
+    pages_done   INTEGER DEFAULT 0,
+    chunks_total INTEGER,
+    chunks_done  INTEGER DEFAULT 0,
+    eta_seconds  REAL,
+    ocr_used     INTEGER DEFAULT 0,
+    ocr_error    TEXT,
+    word_count   INTEGER,
+    audio_url    TEXT,
+    error        TEXT
+)
+"""
+
+
+def _get_conn():
+    c = sqlite3.connect(DB_PATH, timeout=5)
+    c.row_factory = sqlite3.Row
+    return c
+
+
+def _init_jobs_db():
+    with _get_conn() as c:
+        c.execute(_SQL_INIT)
+        c.commit()
+
+
+_init_jobs_db()
+
+
+def update_job(job_id, **kwargs):
+    if not kwargs:
+        return
+    cols = []
+    vals = []
+    for k, v in kwargs.items():
+        cols.append(f"{k}=?")
+        vals.append(v if k != "ocr_used" else int(v))
+    vals.append(job_id)
+    sql = f"UPDATE jobs SET {', '.join(cols)} WHERE job_id=?"
+    with _get_conn() as c:
+        c.execute(sql, vals)
+        c.commit()
+
+
+def get_job(job_id):
+    with _get_conn() as c:
+        row = c.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+    if row is None:
+        return {}
+    d = dict(row)
+    d["ocr_used"] = bool(d["ocr_used"])
+    return d
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -79,17 +133,6 @@ def _cleanup_old_audio():
 
 
 threading.Thread(target=_cleanup_old_audio, daemon=True).start()
-
-
-def update_job(job_id, **kwargs):
-    with JOBS_LOCK:
-        if job_id in JOBS:
-            JOBS[job_id].update(kwargs)
-
-
-def get_job(job_id):
-    with JOBS_LOCK:
-        return dict(JOBS.get(job_id, {}))
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -344,17 +387,12 @@ def convert():
     audio_path = AUDIO_DIR / f"{job_id}.mp3"
     file.save(str(pdf_path))
 
-    with JOBS_LOCK:
-        JOBS[job_id] = {
-            "status": "processing",
-            "phase": "starting",
-            "pages_total": None,
-            "pages_done": 0,
-            "chunks_total": None,
-            "chunks_done": 0,
-            "eta_seconds": None,
-            "ocr_used": False,
-        }
+    with _get_conn() as c:
+        c.execute(
+            "INSERT INTO jobs (job_id, status, phase) VALUES (?, 'processing', 'starting')",
+            (job_id,),
+        )
+        c.commit()
 
     thread = threading.Thread(
         target=run_conversion_job,
