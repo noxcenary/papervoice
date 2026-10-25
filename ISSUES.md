@@ -1,5 +1,8 @@
 # Papervoice — Known Issues & Handoff Notes
 
+Last updated: 2026-10-26. See `README.md` for setup and `ARCHITECTURE.md` for the
+current request/pipeline design.
+
 Written for whoever (human or agent) picks this project up next in Antigravity IDE.
 This documents everything currently broken, untested, or intentionally incomplete.
 
@@ -18,14 +21,15 @@ Now `/convert` returns a `job_id` immediately and the frontend polls `/progress/
 single page PDF) in the Claude sandbox — confirmed OCR correctly triggers
 (`ocr_used: True`) and extracts readable text via Tesseract. Normal text-based
 PDFs correctly skip OCR (`ocr_used: False`, no speed penalty).
-**Still needs testing on a REAL scanned document** (multi-page, actual scan
-quality/noise, skewed pages, etc.) — the sandbox test used a clean synthetic
-image, which is a best-case scenario. Real scans may have lower OCR accuracy.
+Since then, OCR has also been exercised on a real 28-page academic PDF (see
+“Needs Verification” below). The trigger works and throughput was measured, but
+subjective accuracy on noisy, skewed, or low-resolution scans is still not fully
+validated.
 
 ### 3. Local dev server (Flask/Windows) had connectivity issues
 Not a code bug — was resolved by using `127.0.0.1` instead of `localhost` and
-checking Windows Firewall rules for Python. Worth adding a note in README about
-this being a common Windows dev gotcha.
+checking Windows Firewall rules for Python. This gotcha is now documented in the
+root `README.md`.
 
 ### 4. Sandbox network restrictions blocked TTS testing
 In the Claude sandbox environment, `speech.platform.bing.com` (used by `edge-tts`)
@@ -58,9 +62,7 @@ text-extraction quality issue worth investigating (`pdfplumber` or `PyMuPDF` as
 alternatives to `pypdf`).
 
 **Known edge cases (backlog, not blockers):**
-- `strip_page_numbers()` won't catch worded footers like `"Page 3"` or `"Page 3 of 28"` —
-  those contain non-digit chars and won't match the regex. If QA hits a doc where this
-  slips through, expand the regex then (don't pre-optimise).
+- ~~`strip_page_numbers()` won't catch worded footers like `"Page 3"` or `"Page 3 of 28"`~~ — **Fixed.** Regex now covers `Page N`, `Page N of M`, and `N of M` patterns.
 - On very short documents (3–4 pages), a legitimately repeated section title could
   coincidentally hit the 60% threshold in `strip_repeated_boilerplate` and be stripped.
   Low probability; fix if it's actually observed, not before.
@@ -77,31 +79,35 @@ alternatives to `pypdf`).
    also flag if OCR output is materially cleaner than `pypdf` on the same doc
    (would indicate a text-extraction quality issue, not a true "needs OCR" case).
 
-2. **Progress % / ETA accuracy** — the ETA calculation is a simple linear
-   extrapolation (elapsed time / % done * remaining %). This will be inaccurate
-   early in the job (first chunk) and should smooth out. Not yet tested against
-   a real long document to see how close the estimate lands.
+2. **Progress % / ETA accuracy** — the backend now writes `eta_seconds` every
+   second from a phase-specific wall-clock estimate
+   (`total_chars / (TTS_CHARS_PER_SECOND × TTS_CONCURRENCY)`), instead of only
+   after each chunk. The React UI hides the estimate for the first two extraction
+   pages, then shows it below the clock; the clock hands are driven by the
+   remaining/total ETA. Verified on the 40-page test PDF: the value ticks down
+   every second and the hands move proportionally. The estimate is deliberately
+   conservative — on a fast network the job may finish with time left on the
+   clock, and under Microsoft-side throttling it can sit at `1s` briefly before
+   completion. Not yet validated on a 100+ page document.
 
 3. **Concurrent users** — gunicorn with `--workers 1` (Free tier, single CPU).
-   Background jobs run in Python threads within the worker, which works but
-   doesn't scale well. Fine for personal/small-scale use; would need a real task
-   queue (Celery/RQ + Redis) for anything higher-traffic.
+   Background jobs run in Python threads within the worker, and each active job
+   now opens up to `TTS_CONCURRENCY` (default 4) outbound Edge TTS connections.
+   Fine for personal/small-scale use; multiple simultaneous large uploads will
+   contend for the single worker and network. A real task queue (Celery/RQ +
+   Redis) would be needed for higher traffic.
 
-4. **Job storage is in-memory** (`JOBS` dict in `app.py`). This means:
-   - Restarting the server loses all in-progress/completed job records
-   - **Confirmed failure (2026-07-11):** a `git push` during an active conversion
-     triggers a Render redeploy — the old container is killed and its in-memory
-     `JOBS` dict vanishes. The frontend's next `/progress/<job_id>` poll gets
-     `404 Job not found`. The job, its progress, and any finished audio are
-     unrecoverable. The only mitigation is: don't push new commits while a live
-     test conversion is running.
-   - Multiple gunicorn workers do NOT share this dict — a poll request could hit
-     a different worker than the one processing the job and get a 404
+4. ~~**Job storage is in-memory** (`JOBS` dict in `app.py`)~~. — **Fixed.** Jobs are now stored
+   in SQLite (`/tmp/jobs.db`). Survives worker crashes and health-check restarts within the
+   same container. `/tmp` is still wiped on Render redeploy, so a full redeploy during an
+   active conversion still loses the job — just as before, but now it's an ephemeral-storage
+   issue, not a Python-dict issue. `ocr_page_number` column was missing from the original
+   schema (silent `OperationalError` on every OCR page); added and migrated via `ALTER TABLE`
+   on startup.
    - **Current config: `--workers 1`** (set in both `Procfile` and `Dockerfile`).
-     Single-worker is the intentional v1 launch config — avoids the dict-sharding
-     bug at the cost of serialising all requests. Fine for personal use.
-     **Follow-up (higher priority):** migrate job state to Redis or SQLite before
-     bumping workers or relying on concurrent deploys.
+     Single-worker is the intentional v1 launch config.
+     **Follow-up (lower priority now):** migrate to Redis or SQLite-backed queue before
+     bumping workers or enabling zero-downtime deploys.
 
 5. ~~**No cleanup of `/tmp/pdf_audio`**~~ — **Fixed.** `_cleanup_old_audio` daemon
    thread deletes audio files older than 2 h, runs every 10 min.
@@ -109,6 +115,38 @@ alternatives to `pypdf`).
 6. ~~**Encrypted/password-protected PDFs**~~ — **Fixed.** `reader.is_encrypted` check
    in `extract_text_with_progress` raises a friendly `ValueError` before any page
    iteration; frontend shows a clean error message.
+
+---
+
+## 🟡 Frontend vs. Deployment Gap
+
+- Two UIs exist:
+  - `frontend/` — React 19 + Vite app used for all current UI work. Runs on
+    `http://127.0.0.1:5173` and proxies `/convert`, `/progress`, `/audio` to Flask
+    on port 5000.
+  - `templates/index.html` — legacy vanilla UI served by Flask at `/`, and still
+    the UI used by the Render deployment.
+- `npm run build` emits `frontend/dist`, but Flask does not serve it. The React
+  app must either be wired into Flask (serve `dist/index.html` + assets) or
+  deployed separately before it reaches production.
+- Verified in the React UI: live page/chunk progress, ETA countdown, countdown
+  clock, drag-and-drop file display, animated voice/speed dropdowns, and result
+  playback/download.
+
+---
+
+## 🟢 Performance — 2026-10-26
+
+- TTS chunk synthesis is now parallel: up to `TTS_CONCURRENCY` (default `4`)
+  chunks are synthesized concurrently with `asyncio.gather` + a semaphore, then
+  concatenated in their original order. Measured on the 40-page test PDF:
+  **93–151 s sequential → ~10 s** on a fast network, **26–36 s** when
+  Microsoft-side throttling kicks in.
+- `TTS_CHARS_PER_SECOND` (default `250`, per stream) seeds the ETA together with
+  the concurrency factor.
+- Frontend: `formatEta` no longer produces `1:60`; clock hands follow the
+  countdown instead of jumping with chunk progress; headline/subtitle typography
+  and the “Convert to audio” button were restyled (see `frontend/README.md`).
 
 ---
 
@@ -132,16 +170,19 @@ This is fine for v1.
 
 ## 📋 Feature Requests Still Open
 
-- [ ] Show real-time "Page X of Y" progress during extraction/OCR (backend supports
-      this now — verify frontend displays it correctly)
-- [ ] Show ETA countdown during conversion (backend supports this — verify accuracy)
-- [ ] Auto-detect and OCR scanned PDFs without failing (implemented, untested on real scans)
+- [x] Show real-time "Page X of Y" progress during extraction/OCR — verified in the React UI
+- [x] Show ETA countdown during conversion — verified in the React UI; clock hands follow the remaining time
+- [x] Auto-detect and OCR scanned PDFs without failing — verified on a real 28-page PDF; accuracy on noisy scans still worth a subjective check
+- [ ] Serve the React build from Flask / Render (production currently uses `templates/index.html`)
+- [ ] Add committed automated tests (current verification uses ad-hoc Playwright/API scripts outside the repo)
+- [ ] Parallelize OCR page processing if scanned documents are a common upload (currently ~43 s/page, sequential)
 - [x] Cleanup job for old temp files — audio files older than 2 h auto-deleted (`_cleanup_old_audio` thread)
 - [x] Handle encrypted PDFs gracefully — `reader.is_encrypted` check in `extract_text_with_progress`,
       returns user-friendly error message
 - [x] `/convert` input validation — `speed` field now parsed with try/except + clamped -50..+50
+- [x] Worded page footers ("Page 3 of 28") — `strip_page_numbers` regex expanded to cover `Page N`, `Page N of M`, `N of M`
+- [x] `ocr_page_number` missing from DB schema — caused silent `OperationalError` on every OCR page; column added + startup migration
+- [x] Job state migrated from in-memory dict to SQLite (`/tmp/jobs.db`) — survives in-process restarts
 - [ ] (Not yet started) Rate limiting / abuse prevention now that this is public-facing
-- [ ] Migrate job state from in-memory `JOBS` dict to Redis or SQLite — any container
-      restart (deploy, crash, scale) loses in-flight conversions. Confirmed failure:
-      a `git push` during an active job kills the old container's `JOBS` dict,
-      leaving the user with a `404 Job not found` error and unrecoverable audio.
+- [ ] Container-level job persistence — SQLite at `/tmp` still wiped on Render redeploy; would need
+      a persistent volume or external store (Redis) for zero-downtime deploys

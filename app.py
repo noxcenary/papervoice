@@ -45,6 +45,8 @@ VOICES = {
 
 MAX_CHARS_PER_CHUNK = 8000
 MIN_WORDS_PER_PAGE_BEFORE_OCR = 20  # below this, assume scanned & try OCR
+TTS_CHARS_PER_SECOND = float(os.environ.get("TTS_CHARS_PER_SECOND", "250"))
+TTS_CONCURRENCY = max(1, int(os.environ.get("TTS_CONCURRENCY", "4")))
 
 # ══════════════════════════════════════════════════════════════════════════
 # 🗄️  SQLITE JOB STORE — persists across process restarts within the same
@@ -56,19 +58,20 @@ DB_PATH = os.environ.get("JOBS_DB_PATH", "/tmp/jobs.db")
 
 _SQL_INIT = """
 CREATE TABLE IF NOT EXISTS jobs (
-    job_id       TEXT PRIMARY KEY,
-    status       TEXT DEFAULT 'processing',
-    phase        TEXT DEFAULT 'starting',
-    pages_total  INTEGER,
-    pages_done   INTEGER DEFAULT 0,
-    chunks_total INTEGER,
-    chunks_done  INTEGER DEFAULT 0,
-    eta_seconds  REAL,
-    ocr_used     INTEGER DEFAULT 0,
-    ocr_error    TEXT,
-    word_count   INTEGER,
-    audio_url    TEXT,
-    error        TEXT
+    job_id          TEXT PRIMARY KEY,
+    status          TEXT DEFAULT 'processing',
+    phase           TEXT DEFAULT 'starting',
+    pages_total     INTEGER,
+    pages_done      INTEGER DEFAULT 0,
+    chunks_total    INTEGER,
+    chunks_done     INTEGER DEFAULT 0,
+    eta_seconds     REAL,
+    ocr_used        INTEGER DEFAULT 0,
+    ocr_page_number INTEGER,
+    ocr_error       TEXT,
+    word_count      INTEGER,
+    audio_url       TEXT,
+    error           TEXT
 )
 """
 
@@ -82,6 +85,10 @@ def _get_conn():
 def _init_jobs_db():
     with _get_conn() as c:
         c.execute(_SQL_INIT)
+        # Migrate existing DBs: add ocr_page_number if missing
+        existing = {row[1] for row in c.execute("PRAGMA table_info(jobs)")}
+        if "ocr_page_number" not in existing:
+            c.execute("ALTER TABLE jobs ADD COLUMN ocr_page_number INTEGER")
         c.commit()
 
 
@@ -175,8 +182,10 @@ def strip_repeated_boilerplate(pages_text: list[str], threshold: float = 0.6) ->
     Drop any line that appears on more than `threshold` fraction of pages.
     Normalizes lines by stripping trailing numbers/spaces to catch headers or
     footers that have page numbers appended (e.g. 'Prepared by: Author 3').
+    Requires at least 2 pages; otherwise single-page documents have count=1 >= cutoff
+    which falsely strips every line of the document.
     """
-    if not pages_text:
+    if not pages_text or len(pages_text) < 2:
         return pages_text
 
     import re
@@ -195,24 +204,34 @@ def strip_repeated_boilerplate(pages_text: list[str], threshold: float = 0.6) ->
             if norm:
                 line_counts[norm] += 1
 
-    cutoff = len(pages_text) * threshold
+    cutoff = max(2, len(pages_text) * threshold)
     boilerplate = {norm for norm, count in line_counts.items() if count >= cutoff}
 
     cleaned = []
     for page in pages_text:
         kept = [ln for ln in page.splitlines() if normalize(ln) not in boilerplate]
         cleaned.append("\n".join(kept))
+
+    # Safety: if stripping boilerplate emptied the text, fallback to original
+    if not "\n\n".join(cleaned).strip() and any(p.strip() for p in pages_text):
+        return pages_text
+
     return cleaned
 
 
 
 def strip_page_numbers(pages_text: list[str]) -> list[str]:
     """
-    Drop standalone lines that are purely numeric (e.g. "42", "- 7 -").
-    Page numbers differ per page so the repeat-threshold won't catch them.
+    Drop standalone lines that are purely numeric (e.g. "42", "- 7 -")
+    or common worded page-number patterns ("Page 3", "Page 3 of 28",
+    "3 of 28"). Page numbers differ per page so repeat-threshold misses them.
     """
     import re
-    page_num_re = re.compile(r'^[\s\-–—]*\d+[\s\-–—]*$')
+    page_num_re = re.compile(
+        r'^[\s\-–—]*\d+[\s\-–—]*$'                  # pure digit(s): "42", "- 7 -"
+        r'|^[Pp]age\s+\d+(\s+of\s+\d+)?[\s\-–—]*$'  # "Page 3", "Page 3 of 28"
+        r'|^\d+\s+of\s+\d+[\s\-–—]*$'               # "3 of 28"
+    )
     cleaned = []
     for page in pages_text:
         kept = [ln for ln in page.splitlines() if not page_num_re.match(ln)]
@@ -299,33 +318,59 @@ def chunk_text(text: str, size: int = MAX_CHARS_PER_CHUNK):
 async def synthesize_with_progress(text: str, voice: str, rate: str, output_path: Path, job_id: str):
     chunks = chunk_text(text)
     total_chunks = len(chunks)
-    update_job(job_id, phase="converting", chunks_total=total_chunks, chunks_done=0)
+    total_chars = sum(len(chunk) for chunk in chunks)
+    concurrency = max(1, min(TTS_CONCURRENCY, total_chunks))
+    expected_seconds = max(1.0, total_chars / (TTS_CHARS_PER_SECOND * concurrency))
 
     start_time = time.time()
-    temp_files = []
+    update_job(
+        job_id,
+        phase="converting",
+        chunks_total=total_chunks,
+        chunks_done=0,
+        eta_seconds=max(1, round(expected_seconds)),
+    )
 
-    for i, chunk in enumerate(chunks):
-        temp_path = output_path.parent / f"{output_path.stem}_part{i}.mp3"
-        communicate = edge_tts.Communicate(chunk, voice, rate=rate)
-        await communicate.save(str(temp_path))
-        temp_files.append(temp_path)
+    async def eta_ticker():
+        # Count down in real time even while a long chunk is being synthesized.
+        while True:
+            remaining = expected_seconds - (time.time() - start_time)
+            update_job(job_id, eta_seconds=max(1, round(remaining)))
+            await asyncio.sleep(1)
 
-        elapsed = time.time() - start_time
-        done = i + 1
-        avg_per_chunk = elapsed / done
-        remaining = total_chunks - done
-        eta_seconds = round(avg_per_chunk * remaining)
+    eta_task = asyncio.create_task(eta_ticker())
+    sem = asyncio.Semaphore(concurrency)
+    chunks_done = 0
 
-        update_job(job_id, chunks_done=done, eta_seconds=eta_seconds)
+    async def synthesize_chunk(index: int, chunk: str) -> Path:
+        nonlocal chunks_done
+        async with sem:
+            temp_path = output_path.parent / f"{output_path.stem}_part{index}.mp3"
+            communicate = edge_tts.Communicate(chunk, voice, rate=rate)
+            await communicate.save(str(temp_path))
+            chunks_done += 1
+            update_job(job_id, chunks_done=chunks_done)
+            return temp_path
 
-    if len(temp_files) == 1:
-        temp_files[0].rename(output_path)
-    else:
-        with open(output_path, "wb") as outfile:
-            for temp_path in temp_files:
-                with open(temp_path, "rb") as infile:
-                    outfile.write(infile.read())
-                temp_path.unlink()
+    try:
+        temp_files = await asyncio.gather(
+            *(synthesize_chunk(i, chunk) for i, chunk in enumerate(chunks))
+        )
+
+        if len(temp_files) == 1:
+            temp_files[0].replace(output_path)
+        else:
+            with open(output_path, "wb") as outfile:
+                for temp_path in temp_files:
+                    with open(temp_path, "rb") as infile:
+                        outfile.write(infile.read())
+                    temp_path.unlink()
+    finally:
+        eta_task.cancel()
+        try:
+            await eta_task
+        except asyncio.CancelledError:
+            pass
 
 
 # ══════════════════════════════════════════════════════════════════════════

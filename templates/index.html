@@ -657,10 +657,23 @@ const CIRCUMFERENCE = 2 * Math.PI * R; // 552.92
 let pollTimer = null;
 
 // ── File upload drag and drop handlers ──
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / Math.pow(1024, i);
+  return `${parseFloat(value.toFixed(i === 0 ? 0 : 2))} ${units[i]}`;
+}
+
+function showFile(file) {
+  if (!file) return;
+  fileName.textContent = `${file.name} · ${formatFileSize(file.size)}`;
+  fileName.style.display = 'block';
+}
+
 pdfInput.addEventListener('change', () => {
   if (pdfInput.files.length) {
-    fileName.textContent = pdfInput.files[0].name;
-    fileName.style.display = 'block';
+    showFile(pdfInput.files[0]);
   }
 });
 
@@ -673,8 +686,7 @@ pdfInput.addEventListener('change', () => {
 dropZone.addEventListener('drop', e => {
   if (e.dataTransfer.files.length) {
     pdfInput.files = e.dataTransfer.files;
-    fileName.textContent = e.dataTransfer.files[0].name;
-    fileName.style.display = 'block';
+    showFile(e.dataTransfer.files[0]);
   }
 });
 
