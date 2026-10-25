@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wispy Plasma Orb — Prototype v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #05050a;
+    color: #f5f5f5;
+    font-family: 'Manrope', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 40px 24px;
+    gap: 36px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  h2 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(245,245,245,0.35);
+    z-index: 2;
+  }
+
+  /* ── Orb Container ── */
+  .orb-container {
+    position: relative;
+    width: 340px;
+    height: 340px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+
+  /* CSS glow layers — diffuse ambient behind the SVG */
+  .orb-glow {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .orb-glow-1 {
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(15,45,100,0.55) 0%, rgba(8,15,40,0.25) 45%, transparent 72%);
+    filter: blur(40px);
+  }
+  .orb-glow-2 {
+    width: 80%;
+    height: 80%;
+    background: radial-gradient(circle, rgba(30,110,170,0.35) 0%, rgba(15,50,90,0.15) 50%, transparent 72%);
+    filter: blur(28px);
+  }
+  .orb-glow-3 {
+    width: 60%;
+    height: 60%;
+    background: radial-gradient(circle, rgba(60,180,230,0.25) 0%, rgba(20,100,150,0.1) 50%, transparent 70%);
+    filter: blur(18px);
+  }
+
+  /* ── SVG plasma layers ── */
+  .orb-svg {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  /* ── Hot core ── */
+  .orb-core {
+    width: 44px;
+    height: 44px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow:
+      0 0 20px 6px rgba(255, 255, 255, 0.5),
+      0 0 50px 18px rgba(120, 220, 255, 0.3),
+      0 0 80px 30px rgba(60, 180, 240, 0.15);
+    z-index: 3;
+    transition: transform 0.08s ease-out;
+  }
+
+  /* ── Controls Card ── */
+  .player-card {
+    background: #0e0e14;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    padding: 24px;
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 2;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    flex: 1;
+    min-width: 100px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(245,245,245,0.1);
+    background: rgba(245,245,245,0.04);
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: rgba(245,245,245,0.8);
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .btn:hover {
+    background: rgba(245,245,245,0.08);
+    border-color: rgba(245,245,245,0.2);
+  }
+  .btn.active {
+    background: rgba(100, 200, 255, 0.15);
+    border-color: rgba(100, 200, 255, 0.35);
+    color: #fff;
+  }
+
+  .file-btn {
+    position: relative;
+    flex: 1;
+    min-width: 100px;
+  }
+  .file-btn input { display: none; }
+
+  audio {
+    width: 100%;
+    height: 38px;
+    accent-color: #6ac8f0;
+    display: none;
+  }
+  audio.show { display: block; }
+
+  .status-line {
+    font-size: 12px;
+    color: rgba(245,245,245,0.35);
+    text-align: center;
+    min-height: 18px;
+  }
+  .status-line strong {
+    color: rgba(245,245,245,0.6);
+  }
+
+  .instructions {
+    font-size: 11px;
+    color: rgba(245,245,245,0.3);
+    text-align: center;
+    line-height: 1.5;
+    max-width: 340px;
+    z-index: 2;
+  }
+
+  @media (max-width: 420px) {
+    .orb-container { width: 280px; height: 280px; }
+    .btn-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<h2>Wispy Plasma Orb — Prototype v2</h2>
+
+<div class="orb-container">
+  <div class="orb-glow orb-glow-1" id="glow1"></div>
+  <div class="orb-glow orb-glow-2" id="glow2"></div>
+  <div class="orb-glow orb-glow-3" id="glow3"></div>
+
+  <svg class="orb-svg" viewBox="-200 -200 400 400" id="orbSvg">
+    <defs>
+      <radialGradient id="g-outer" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#1a5090" stop-opacity="0.8"/>
+        <stop offset="30%" stop-color="#0f2a60" stop-opacity="0.45"/>
+        <stop offset="60%" stop-color="#081538" stop-opacity="0.15"/>
+        <stop offset="100%" stop-color="#030812" stop-opacity="0"/>
+      </radialGradient>
+
+      <radialGradient id="g-mid" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#50d4f8" stop-opacity="0.9"/>
+        <stop offset="22%" stop-color="#2098c8" stop-opacity="0.6"/>
+        <stop offset="50%" stop-color="#0c4070" stop-opacity="0.2"/>
+        <stop offset="100%" stop-color="#041028" stop-opacity="0"/>
+      </radialGradient>
+
+      <radialGradient id="g-inner" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+        <stop offset="18%" stop-color="#90ecff" stop-opacity="0.8"/>
+        <stop offset="40%" stop-color="#30b8e0" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="#084060" stop-opacity="0"/>
+      </radialGradient>
+
+      <filter id="plasma-outer" x="-60%" y="-60%" width="220%" height="220%">
+        <feTurbulence id="turb-outer" type="fractalNoise" baseFrequency="0.012" numOctaves="3" result="noise"/>
+        <feDisplacementMap id="disp-outer" in="SourceGraphic" in2="noise" scale="45" xChannelSelector="R" yChannelSelector="G"/>
+        <feGaussianBlur stdDeviation="3"/>
+      </filter>
+
+      <filter id="plasma-inner" x="-60%" y="-60%" width="220%" height="220%">
+        <feTurbulence id="turb-inner" type="fractalNoise" baseFrequency="0.025" numOctaves="4" result="noise"/>
+        <feDisplacementMap id="disp-inner" in="SourceGraphic" in2="noise" scale="35" xChannelSelector="R" yChannelSelector="G"/>
+        <feGaussianBlur stdDeviation="1.5"/>
+      </filter>
+    </defs>
+
+    <circle cx="0" cy="0" r="160" fill="url(#g-outer)" filter="url(#plasma-outer)"/>
+    <circle cx="0" cy="0" r="110" fill="url(#g-mid)" filter="url(#plasma-inner)"/>
+    <circle cx="0" cy="0" r="65" fill="url(#g-inner)" filter="url(#plasma-inner)"/>
+    <circle cx="0" cy="0" r="34" fill="rgba(255,255,255,0.45)" filter="blur(8px)"/>
+  </svg>
+
+  <div class="orb-core" id="orbCore"></div>
+</div>
+
+<div class="player-card">
+  <div class="btn-row">
+    <button class="btn" id="btnOsc">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      Demo Tone
+    </button>
+    <button class="btn" id="btnMic">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg>
+      Mic Input
+    </button>
+    <label class="btn file-btn" id="fileLabel">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload Audio
+      <input type="file" id="audioFile" accept="audio/*">
+    </label>
+  </div>
+
+  <audio id="audioPlayer" controls></audio>
+
+  <div class="status-line" id="statusLine">Orb is idle. Start a source to see audio reactivity.</div>
+</div>
+
+<div class="instructions">
+  feTurbulence + feDisplacementMap produce wispy plasma tendrils from gradient-filled circles.
+  <strong>Base frequency</strong> and <strong>displacement scale</strong> are driven by audio frequency bands — not polygon path morphing.
+</div>
+
+<script>
+(function(){
+  // ── DOM refs ──
+  const orbCore     = document.getElementById('orbCore');
+  const glow1       = document.getElementById('glow1');
+  const glow2       = document.getElementById('glow2');
+  const glow3       = document.getElementById('glow3');
+  const btnOsc      = document.getElementById('btnOsc');
+  const btnMic      = document.getElementById('btnMic');
+  const audioFile   = document.getElementById('audioFile');
+  const audioPlayer = document.getElementById('audioPlayer');
+  const statusLine  = document.getElementById('statusLine');
+
+  const turbOuter   = document.getElementById('turb-outer');
+  const dispOuter   = document.getElementById('disp-outer');
+  const turbInner   = document.getElementById('turb-inner');
+  const dispInner   = document.getElementById('disp-inner');
+
+  // ── Audio state ──
+  let audioCtx    = null;
+  let analyser    = null;
+  let dataArray   = null;
+  let rafId       = null;
+  let activeType  = null; // 'osc' | 'mic' | 'file'
+
+  // ── Node refs ──
+  let gainNode     = null;
+  let mediaSource  = null; // permanent MediaElementSource for audioPlayer
+  let oscNodes     = null;
+  let micStream    = null;
+  let micSource    = null;
+
+  // Cache SVG core glow circle ref
+  const svgCoreGlow = document.querySelector('.orb-svg circle:last-child');
+
+  // ── Audio init ──
+  function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 128;
+    const bufLen = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufLen);
+
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = 1;
+    gainNode.connect(analyser);
+    analyser.connect(audioCtx.destination);
+
+    // Wire HTML audio element permanently (create once, required by spec)
+    mediaSource = audioCtx.createMediaElementSource(audioPlayer);
+    mediaSource.connect(gainNode);
+  }
+
+  // ── Start oscillator demo ──
+  function startOscillator() {
+    stopAll();
+    initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    activeType = 'osc';
+    btnOsc.classList.add('active');
+    setStatus('Demo oscillator active \u2014 listening...');
+
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 120;
+
+    const osc2 = audioCtx.createOscillator();
+    osc2.type = 'triangle';
+    osc2.frequency.value = 280;
+
+    const lfo = audioCtx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 2.8;
+
+    const lfoGain = audioCtx.createGain();
+    lfoGain.gain.value = 70;
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+
+    const lfo2 = audioCtx.createOscillator();
+    lfo2.type = 'sine';
+    lfo2.frequency.value = 1.7;
+
+    const lfoGain2 = audioCtx.createGain();
+    lfoGain2.gain.value = 0.25;
+    lfo2.connect(lfoGain2);
+    lfoGain2.connect(gainNode.gain);
+
+    osc.connect(gainNode);
+    osc2.connect(gainNode);
+
+    lfo.start();
+    lfo2.start();
+    osc.start();
+    osc2.start();
+
+    oscNodes = { osc, osc2, lfo, lfo2 };
+
+    if (!rafId) updateVisuals();
+  }
+
+  function stopOscillator() {
+    if (oscNodes) {
+      try {
+        oscNodes.osc.stop();
+        oscNodes.osc2.stop();
+        oscNodes.lfo.stop();
+        oscNodes.lfo2.stop();
+      } catch(e) {}
+      oscNodes = null;
+    }
+    btnOsc.classList.remove('active');
+  }
+
+  // ── Start mic input ──
+  async function startMic() {
+    stopAll();
+    initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micSource = audioCtx.createMediaStreamSource(micStream);
+      micSource.connect(gainNode);
+
+      activeType = 'mic';
+      btnMic.classList.add('active');
+      setStatus('Microphone active \u2014 speak or make noise!');
+
+      if (!rafId) updateVisuals();
+    } catch (err) {
+      setStatus('Mic access denied or unavailable.');
+      stopMic();
+    }
+  }
+
+  function stopMic() {
+    if (micSource) {
+      try { micSource.disconnect(); } catch(e) {}
+      micSource = null;
+    }
+    if (micStream) {
+      micStream.getTracks().forEach(t => t.stop());
+      micStream = null;
+    }
+    btnMic.classList.remove('active');
+  }
+
+  // ── File playback ──
+  function startFilePlayback(file) {
+    stopAll();
+    initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const url = URL.createObjectURL(file);
+    audioPlayer.src = url;
+    audioPlayer.classList.add('show');
+    activeType = 'file';
+    setStatus('Playing uploaded file...');
+
+    audioPlayer.play().catch(() => {});
+
+    if (!rafId) updateVisuals();
+  }
+
+  // ── Stop all sources ──
+  function stopAll() {
+    stopOscillator();
+    stopMic();
+    if (activeType === 'file') {
+      audioPlayer.pause();
+      audioPlayer.classList.remove('show');
+    }
+    activeType = null;
+    setStatus('Orb is idle. Start a source to see audio reactivity.');
+  }
+
+  function setStatus(msg) {
+    statusLine.textContent = msg;
+  }
+
+  // ── File input ──
+  audioFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) startFilePlayback(file);
+  });
+
+  // ── Button handlers ──
+  btnOsc.addEventListener('click', () => {
+    if (activeType === 'osc') { stopAll(); return; }
+    startOscillator();
+  });
+
+  btnMic.addEventListener('click', () => {
+    if (activeType === 'mic') { stopAll(); return; }
+    startMic();
+  });
+
+  // Audio element play kicks off visualizer
+  audioPlayer.addEventListener('play', () => {
+    initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!rafId) updateVisuals();
+  });
+
+  // ── RENDER LOOP ──
+  function updateVisuals() {
+    rafId = requestAnimationFrame(updateVisuals);
+
+    if (!analyser || !dataArray) return;
+
+    analyser.getByteFrequencyData(dataArray);
+
+    // Compute band averages
+    const len = dataArray.length;
+    let sumLow = 0, countLow = 0;
+    let sumMid = 0, countMid = 0;
+    let sumAll = 0;
+
+    for (let i = 0; i < len; i++) {
+      const val = dataArray[i];
+      sumAll += val;
+      if (i < 4)     { sumLow += val; countLow++; }
+      else if (i < 16) { sumMid += val; countMid++; }
+    }
+
+    const avgLow = countLow ? (sumLow / countLow) / 255 : 0;
+    const avgMid = countMid ? (sumMid / countMid) / 255 : 0;
+    const avgAll = len      ? (sumAll / len)       / 255 : 0;
+
+    // ── Time-based organic breathing (always alive) ──
+    const t = Date.now() / 1000;
+    const breathe = 0.5 + 0.5 * Math.sin(t * 0.25);
+    const flutter = 0.5 + 0.5 * Math.sin(t * 2.3);
+
+    // ── Drive feTurbulence baseFrequency ──
+    const outerFreq = 0.008 + (avgLow * 0.03 + breathe * 0.014);
+    const innerFreq = 0.016 + (avgMid * 0.035 + flutter * 0.018);
+    turbOuter.setAttribute('baseFrequency', Math.max(0.005, outerFreq));
+    turbInner.setAttribute('baseFrequency', Math.max(0.008, innerFreq));
+
+    // ── Drive feDisplacementMap scale ──
+    const outerScale = 20 + (avgMid * 70 + flutter * 25 + avgLow * 20);
+    const innerScale = 12 + (avgLow * 45 + breathe * 25 + avgMid * 15);
+    dispOuter.setAttribute('scale', Math.max(5, Math.min(150, outerScale)));
+    dispInner.setAttribute('scale', Math.max(5, Math.min(120, innerScale)));
+
+    // ── CSS glow opacities from overall volume ──
+    const volFactor = avgAll * 0.85 + breathe * 0.15;
+    glow1.style.opacity = 0.25 + volFactor * 0.6;
+    glow2.style.opacity = 0.15 + volFactor * 0.5;
+    glow3.style.opacity = 0.1 + volFactor * 0.45;
+
+    // ── Core scale from overall volume ──
+    const coreScale = 1 + avgAll * 0.55;
+    orbCore.style.transform = `scale(${coreScale})`;
+
+    // ── SVG core glow opacity ──
+    if (svgCoreGlow) {
+      const coreOpacity = 0.3 + avgAll * 0.5 + flutter * 0.2;
+      svgCoreGlow.setAttribute('opacity', Math.min(1, coreOpacity));
+    }
+  }
+
+  // Start gentle breathing immediately (time-based params run even without audio)
+  updateVisuals();
+
+})();
+</script>
+</body>
+</html>
