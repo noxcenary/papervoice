@@ -406,6 +406,14 @@ def run_conversion_job(job_id: str, pdf_path: Path, audio_path: Path, voice: str
 def index():
     return render_template("index.html", voices=VOICES)
 
+@app.route("/assets/<path:filename>")
+def assets(filename):
+    return send_from_directory("frontend/dist/assets", filename)
+
+@app.route("/papervoice-icon-180.png")
+def favicon():
+    return send_from_directory(DIST_DIR, "papervoice-icon-180.png")
+
 
 @app.route("/convert", methods=["POST"])
 def convert():
