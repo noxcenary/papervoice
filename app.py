@@ -408,9 +408,6 @@ def index():
 
 
 
-@app.route("/papervoice-icon-180.png")
-def favicon():
-    return send_from_directory(DIST_DIR, "papervoice-icon-180.png")
 
 
 @app.route("/convert", methods=["POST"])
