@@ -20,5 +20,8 @@ app.view_functions["index"] = react_index
 def react_assets(filename):
     return send_from_directory(DIST_DIR / "assets", filename)
 
+@app.route("/papervoice-icon-180.png")
+def favicon():
+    return send_from_directory(DIST_DIR, "papervoice-icon-180.png")
 
 application = app
